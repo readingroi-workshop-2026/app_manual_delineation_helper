@@ -1,0 +1,20 @@
+[project]
+name = "votcloc-surface-viewer"
+version = "0.1.0"
+description = "Streamlit surface viewer for VOTCLOC manual ROI delineation (inflated/pial + heatmap + atlas/manual labels)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "streamlit>=1.36",
+    "plotly>=5.20",
+    "numpy",
+    "nibabel",
+    "pyyaml",
+]
+
+# This is an app, not a distributable package: tell uv to manage the
+# environment/dependencies only and not try to build/install the project
+# itself. (No [build-system] table => uv already treats it as virtual; this
+# makes the intent explicit.)
+[tool.uv]
+package = false

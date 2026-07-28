@@ -1,0 +1,32 @@
+# Config for the manual-delineation helper app.
+#
+# Two roots the app always needs:
+#   data_dir : derivatives root
+#   fs_dir   : FreeSurfer subject dir (relative to data_dir) — used to load the
+#              surface geometry (inflated/pial + curvature).
+#
+# Then one directory per layer. In each path, "{sub}" is replaced with the
+# selected subject (e.g. sub-02). A relative path is resolved under data_dir;
+# an absolute path is used as-is. Every layer path can also be edited live in
+# the app (the box is pre-filled from here).
+
+data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives_minimal
+fs_dir: freesurfer-with_t2
+
+# Initial dropdown selections
+default_subject: "02"
+default_hemi: lh
+default_surface: inflated
+default_contrast: RWvsPER
+
+# Layer 1 — heatmap overlays (*.func.gii)
+heatmap_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}
+
+# Layer 2 — auto clusters (*_Cluster_*.label)
+clusters_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}/labels
+
+# Layer 3 — FreeSurfer / atlas labels shipped with the recon (lh.*.label)
+atlas_label_dir: freesurfer-with_t2/{sub}/label
+
+# Layer 4 — user-defined manual labels (lh.*.label)
+manual_label_dir: freesurfer-with_t2/{sub}/label/manual-v1
