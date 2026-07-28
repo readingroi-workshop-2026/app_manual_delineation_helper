@@ -17,14 +17,24 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 def load_config(path: Path) -> dict:
-    """Load the YAML config, falling back to a tiny parser if PyYAML is absent."""
+    """Load the YAML config, falling back to a tiny parser if PyYAML is absent.
+
+    Records the config file's own directory under `_config_dir` so that a
+    RELATIVE `data_dir` resolves relative to the config file (i.e. the repo),
+    not the current working directory — this lets data shipped inside the repo
+    be found no matter where the repo is cloned or where the app is launched.
+    """
+    path = Path(path)
     try:
         import yaml  # type: ignore
 
-        with Path(path).open("r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+        with path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
     except ModuleNotFoundError:
-        return _load_simple_yaml(Path(path))
+        cfg = _load_simple_yaml(path)
+    if isinstance(cfg, dict):
+        cfg.setdefault("_config_dir", str(path.resolve().parent))
+    return cfg
 
 
 def _parse_scalar(value: str):
@@ -98,7 +108,28 @@ def normalize_hemi(value: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def data_dir(config: dict) -> Path:
-    return Path(os.path.expanduser(str(config["data_dir"])))
+    """Resolve the data root, chosen by the `data_source` field:
+
+      data_source: repo  -> use `repo_data_dir` (bundled data in this repo)
+      data_source: disk  -> use `disk_data_dir` (a full tree elsewhere)
+
+    Whichever path is chosen: an absolute path is used as-is; a relative path
+    is resolved against the config file's directory (`_config_dir`), so in-repo
+    data is found regardless of the launch cwd. Falls back to a legacy
+    `data_dir` field if the source-specific one is absent.
+    """
+    source = str(config.get("data_source", "repo")).strip().lower()
+    key = "disk_data_dir" if source == "disk" else "repo_data_dir"
+    raw = config.get(key, config.get("data_dir"))
+    if raw is None:
+        raise KeyError(
+            f"config needs '{key}' (for data_source: {source}) or a legacy 'data_dir'"
+        )
+    p = Path(os.path.expanduser(str(raw)))
+    if p.is_absolute():
+        return p
+    base = Path(str(config.get("_config_dir", ".")))
+    return (base / p).resolve()
 
 
 def fs_dir(config: dict) -> Path:

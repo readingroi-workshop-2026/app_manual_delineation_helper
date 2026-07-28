@@ -138,9 +138,22 @@ Notes:
 `config.yaml` holds only the roots and the initial dropdown selections; every
 layer directory is also editable live in the app.
 
+One field, `data_source`, chooses where data comes from:
+
+- `data_source: repo` — the example data bundled in the repo (`repo_data_dir`,
+  default `ROI_delination_DATA/`). It's **relative**, so it resolves next to
+  the config file and works right after `git clone` on any machine.
+- `data_source: disk` — a full derivatives tree elsewhere (`disk_data_dir`, an
+  absolute path), which also has the complete atlas + `manual-v1` labels.
+
+For either path the rule is the same: **relative** → resolved relative to the
+config file (in-repo data); **absolute** → used as-is (a real read directory).
+
 ```yaml
-data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives_minimal
-fs_dir: freesurfer-with_t2          # surface geometry: <data_dir>/<fs_dir>/<sub>/surf/
+data_source: repo                   # repo -> repo_data_dir, disk -> disk_data_dir
+repo_data_dir: ROI_delination_DATA  # in-repo example data (relative to this config)
+disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
+fs_dir: freesurfer-with_t2          # surface geometry: <data_root>/<fs_dir>/<sub>/surf/
 default_subject: "02"
 default_hemi: lh
 default_surface: inflated

@@ -1,17 +1,25 @@
 # Config for the manual-delineation helper app.
 #
-# Two roots the app always needs:
-#   data_dir : derivatives root
-#   fs_dir   : FreeSurfer subject dir (relative to data_dir) — used to load the
-#              surface geometry (inflated/pial + curvature).
+# Where does the data come from? Flip ONE field:
+#   data_source: repo  -> read the example data bundled in this repo
+#                         (repo_data_dir, resolved next to this config file so
+#                         it works right after `git clone`).
+#   data_source: disk  -> read a full derivatives tree elsewhere
+#                         (disk_data_dir, an absolute path).
 #
-# Then one directory per layer. In each path, "{sub}" is replaced with the
-# selected subject (e.g. sub-02). A relative path is resolved under data_dir;
-# an absolute path is used as-is. Every layer path can also be edited live in
-# the app (the box is pre-filled from here).
+# Rule for either path: relative -> resolved next to this config file;
+# absolute -> used as-is.
+data_source: repo
+repo_data_dir: ROI_delination_DATA
+disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
 
-data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives_minimal
+# fs_dir: FreeSurfer subject dir (relative to the chosen data root) — used to
+# load the surface geometry (inflated/pial + curvature).
 fs_dir: freesurfer-with_t2
+
+# Layer paths below are relative to the chosen data root. In each, "{sub}" is
+# replaced with the selected subject; every path is also editable live in the
+# app (the box is pre-filled from here).
 
 # Initial dropdown selections
 default_subject: "02"
