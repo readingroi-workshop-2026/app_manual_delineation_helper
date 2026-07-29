@@ -10,7 +10,7 @@
 # Rule for either path: relative -> resolved next to this config file;
 # absolute -> used as-is.
 data_source: repo
-repo_data_dir: ROI_delination_DATA
+repo_data_dir: ROI_delineation_DATA
 disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
 
 # fs_dir: FreeSurfer subject dir (relative to the chosen data root) — used to

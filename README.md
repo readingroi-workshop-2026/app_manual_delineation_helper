@@ -15,7 +15,7 @@ download [`example_cluster_mapping.csv`](example_cluster_mapping.csv) and, for
 each ROI, write the cluster ID(s) that belong to it.
 
 ```csv
-sub,maunal_ROI(from posterior to anterior),cluster_id
+sub,manual_ROI(from posterior to anterior),cluster_id
 11,OWA,"0,2"
 11,pOTS-words,3
 ```
@@ -257,7 +257,7 @@ layer directory is also editable live in the app.
 One field, `data_source`, chooses where data comes from:
 
 - `data_source: repo` — the example data bundled in the repo (`repo_data_dir`,
-  default `ROI_delination_DATA/`). It's **relative**, so it resolves next to
+  default `ROI_delineation_DATA/`). It's **relative**, so it resolves next to
   the config file and works right after `git clone` on any machine.
 - `data_source: disk` — a full derivatives tree elsewhere (`disk_data_dir`, an
   absolute path), which also has the complete atlas + `manual-v1` labels.
@@ -267,7 +267,7 @@ config file (in-repo data); **absolute** → used as-is (a real read directory).
 
 ```yaml
 data_source: repo                   # repo -> repo_data_dir, disk -> disk_data_dir
-repo_data_dir: ROI_delination_DATA  # in-repo example data (relative to this config)
+repo_data_dir: ROI_delineation_DATA  # in-repo example data (relative to this config)
 disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
 fs_dir: freesurfer-with_t2          # surface geometry: <data_root>/<fs_dir>/<sub>/surf/
 default_subject: "02"
@@ -303,4 +303,4 @@ environment.yml        same dependency list, for conda / micromamba
 launch.sh              headless launcher for remote use
 ```
 
-This directory is self-contained and independent of `../visulizing_local_host`.
+This directory is self-contained and independent of `../visualizing_local_host`.

@@ -1,4 +1,4 @@
-sub,maunal_ROI(from posterior to anterior),cluster_id
+sub,manual_ROI(from posterior to anterior),cluster_id
 11,OWA,"0,2"
 11,pOTS-words,3
 11,mOTS-words,"7,13"
