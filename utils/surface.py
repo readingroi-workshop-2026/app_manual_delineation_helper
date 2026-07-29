@@ -7,9 +7,9 @@ import numpy as np
 from .config import fs_subject_dir, normalize_hemi, normalize_sub
 
 # Default camera orientation per hemisphere. The left-hemisphere view is the
-# original FreeView-matched ventral view; the right-hemisphere view mirrors it
-# across the sagittal plane (flipped azimuth / roll / offset / center) as a
-# sensible starting point — fine-tune the rh sliders and update this dict.
+# original FreeView-matched ventral view; the right-hemisphere view was tuned
+# on the rh sliders to match it. To change either, drag the Camera sliders in
+# the app and copy the values back into this dict.
 DEFAULT_VIEWS = {
     "lh": {
         "azimuth": 40.0,
@@ -22,9 +22,9 @@ DEFAULT_VIEWS = {
     "rh": {
         "azimuth": -40.0,
         "elevation": -10.0,
-        "roll": -90.0,
-        "azim_offset": -110.0,
-        "camera_center_x": -0.38,
+        "roll": -100.0,
+        "azim_offset": -25.0,
+        "camera_center_x": 0.0,
         "convention": "inv_zx",
     },
 }

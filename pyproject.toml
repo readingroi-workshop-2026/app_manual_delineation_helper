@@ -10,6 +10,10 @@ dependencies = [
     "numpy",
     "nibabel",
     "pyyaml",
+    # Native filesystem-event watcher; without it Streamlit falls back to
+    # polling and prints a "For better performance, install the Watchdog
+    # module" warning at startup.
+    "watchdog>=4",
 ]
 
 # This is an app, not a distributable package: tell uv to manage the

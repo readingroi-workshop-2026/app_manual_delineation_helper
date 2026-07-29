@@ -93,6 +93,21 @@ def cluster_labels_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     return out
 
 
+def clusters_by_contrast(cluster_map: dict[str, str]) -> dict[str, list[str]]:
+    """Group `cluster_labels_in` display names by contrast.
+
+    Returns ``{contrast: [display, ...]}`` in the order the clusters appear.
+    Names that don't follow the 'contrast #id' pattern are grouped under
+    themselves, so unrecognized files stay selectable.
+    """
+    out: dict[str, list[str]] = {}
+    for display in cluster_map:
+        head, sep, tail = display.rpartition(" #")
+        contrast = head if sep and tail.isdigit() else display
+        out.setdefault(contrast, []).append(display)
+    return out
+
+
 @st.cache_data(ttl=TTL, show_spinner=False)
 def surface_labels_in(dir_path: str, hemi_fs: str) -> dict[str, str]:
     """`<hemi>.<name>.label` files in a directory → ``{name: path}``.

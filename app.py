@@ -23,6 +23,7 @@ from utils.config import load_config, normalize_hemi, normalize_sub, resolve_dir
 from utils.discovery import (
     CLUSTER_COLORS,
     cluster_labels_in,
+    clusters_by_contrast,
     heatmap_overlays_in,
     surface_labels_in,
 )
@@ -64,8 +65,9 @@ def _keep_valid(key: str, options: list) -> None:
         st.session_state[key] = [v for v in st.session_state[key] if v in valid]
 
 
-def _clear(key: str) -> None:
-    st.session_state[key] = []
+def _clear(*keys: str) -> None:
+    for key in keys:
+        st.session_state[key] = []
 
 
 # ---------------------------------------------------------------------------
@@ -158,10 +160,22 @@ with col2:
             help="Directory of *_Cluster_*.label files. {sub} → subject.",
         )
         cluster_map = cluster_labels_in(str(resolve_dir(config, clusters_tmpl, sub)), hemi_bids)
+        by_contrast = clusters_by_contrast(cluster_map)
+        _keep_valid("cluster_contrast_sel", list(by_contrast))
+        selected_contrasts = st.multiselect(
+            "Contrasts (all clusters)", list(by_contrast), key="cluster_contrast_sel",
+            help="Shortcut for selecting every cluster of that contrast — each one "
+                 "is still drawn individually, with its own color and legend entry.",
+            format_func=lambda c: f"{c} ({len(by_contrast[c])})",
+        )
         _keep_valid("cluster_sel", list(cluster_map))
-        selected_clusters = st.multiselect("Clusters", list(cluster_map), key="cluster_sel")
+        selected_clusters = st.multiselect(
+            "Individual clusters", list(cluster_map), key="cluster_sel",
+            help="Added on top of whatever the contrast selection already covers.",
+        )
         cluster_fill = st.checkbox("Fill", value=False, key="cluster_fill")
-        st.button("Clear all", key="clear_cluster_btn", on_click=_clear, args=("cluster_sel",))
+        st.button("Clear all", key="clear_cluster_btn", on_click=_clear,
+                  args=("cluster_sel", "cluster_contrast_sel"))
         plot_2 = st.button("🔄 Plot", width="stretch", key="plot_btn_2")
 
 # --- 3. Atlas labels -------------------------------------------------------
@@ -196,7 +210,12 @@ with col4:
 
 # --- Build the shared label spec list --------------------------------------
 clusters: list[dict] = []
-for i, name in enumerate(selected_clusters):
+
+# Layer 2: picking a contrast is a shortcut for picking all of its clusters —
+# each one still becomes its own cluster with its own color and legend entry.
+# Union of both selections, kept in cluster_map order (contrast, then id).
+chosen = {n for c in selected_contrasts for n in by_contrast[c]} | set(selected_clusters)
+for i, name in enumerate(n for n in cluster_map if n in chosen):
     clusters.append({
         "label_path": cluster_map[name],
         "color": CLUSTER_COLORS[i % len(CLUSTER_COLORS)],
