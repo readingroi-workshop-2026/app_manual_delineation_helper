@@ -25,6 +25,7 @@ from utils.discovery import (
     cluster_labels_in,
     clusters_by_contrast,
     heatmap_overlays_in,
+    overlay_value_range,
     surface_labels_in,
 )
 from utils.plotting import build_surface_figure
@@ -68,6 +69,40 @@ def _keep_valid(key: str, options: list) -> None:
 def _clear(*keys: str) -> None:
     for key in keys:
         st.session_state[key] = []
+
+
+def _threshold_widgets(overlay_path: str | None, overlay_name: str) -> float:
+    """Threshold slider + exact-value box, bounded by the overlay's own range.
+
+    Overlays span very different ranges, so the bounds are read from the file
+    (peak shown as a caption). Widget keys carry the overlay name: each map
+    keeps its own threshold, and switching maps can't leave a stale value
+    outside the new bounds.
+    """
+    if overlay_path is None:
+        return 0.0
+    vmin, vmax = overlay_value_range(str(overlay_path))
+    lo, hi = 0.0, float(max(vmax, 1e-6))
+    step = max(round(hi / 200, 4), 1e-4)
+    st.caption(f"Range {vmin:.3g} – {vmax:.3g}")
+
+    slider_key, input_key = f"thr_s::{overlay_name}", f"thr_n::{overlay_name}"
+    default = min(0.1, hi)
+    for k in (slider_key, input_key):
+        st.session_state[k] = min(max(float(st.session_state.get(k, default)), lo), hi)
+
+    def _mirror(src: str, dst: str) -> None:
+        st.session_state[dst] = st.session_state[src]
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        st.slider("Threshold", lo, hi, step=step, key=slider_key,
+                  on_change=_mirror, args=(slider_key, input_key))
+    with c2:
+        st.number_input("Exact", lo, hi, step=step, format="%.4g", key=input_key,
+                        on_change=_mirror, args=(input_key, slider_key),
+                        help="Type a threshold; the slider follows.")
+    return float(st.session_state[input_key])
 
 
 # ---------------------------------------------------------------------------
@@ -148,7 +183,9 @@ with col1:
             index=overlay_choices.index(default_overlay) if default_overlay in overlay_choices else 0,
             key="overlay_name",
         )
-        overlay_threshold = st.slider("Threshold", 0.0, 5.0, 0.1, key="overlay_threshold")
+        overlay_threshold = _threshold_widgets(
+            overlays.get(overlay_name) if overlay_name != "none" else None, overlay_name
+        )
         overlay_opacity = st.slider("Opacity", 0.0, 1.0, 0.85, key="overlay_opacity")
         plot_1 = st.button("🔄 Plot", width="stretch", key="plot_btn_1")
 
@@ -168,6 +205,8 @@ with col2:
                  "is still drawn individually, with its own color and legend entry.",
             format_func=lambda c: f"{c} ({len(by_contrast[c])})",
         )
+        st.caption("ℹ️ Cluster IDs run **posterior → anterior**: the higher the "
+                   "index, the more anterior the cluster.")
         _keep_valid("cluster_sel", list(cluster_map))
         selected_clusters = st.multiselect(
             "Individual clusters", list(cluster_map), key="cluster_sel",
@@ -239,6 +278,10 @@ for i, name in enumerate(selected_manual):
 
 overlay_path = None if overlay_name == "none" else overlays.get(overlay_name)
 
+# Same note as in panel 2, shown next to the clickable legend entries.
+legend_note = ("Cluster IDs: posterior → anterior<br>(higher index = more anterior)"
+               if (selected_contrasts or selected_clusters) else None)
+
 
 # ---------------------------------------------------------------------------
 # Render — one full-width surface.
@@ -260,6 +303,7 @@ if need_build:
             overlay_opacity=overlay_opacity,
             surface_type=surface_type,
             drag_mode=drag_mode,
+            legend_note=legend_note,
         )
     except Exception as exc:
         st.error(str(exc))

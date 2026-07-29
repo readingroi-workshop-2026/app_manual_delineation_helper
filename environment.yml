@@ -1,0 +1,21 @@
+# Conda / micromamba environment for the surface viewer.
+#
+#   conda env create -f environment.yml      (or: micromamba create -f environment.yml)
+#   conda activate votcloc-surface-viewer
+#
+# Same dependency set as pyproject.toml / requirements.txt, from conda-forge.
+name: votcloc-surface-viewer
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python>=3.9
+  - streamlit>=1.36
+  - plotly>=5.20
+  - numpy
+  - nibabel
+  - pyyaml
+  # Native filesystem-event watcher; without it Streamlit falls back to polling
+  # and warns at startup.
+  - watchdog>=4

@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import numpy as np
 import streamlit as st
 
 TTL = 30  # seconds
@@ -91,6 +92,27 @@ def cluster_labels_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
         display = f"{contrast} #{cid}" if cid >= 0 else Path(path).stem
         out[display] = path
     return out
+
+
+@st.cache_data(ttl=TTL, show_spinner=False)
+def overlay_value_range(path: str) -> tuple[float, float]:
+    """(min, max) of the finite values in a `.func.gii` overlay.
+
+    Used to bound the threshold widget: overlays differ by an order of
+    magnitude (a *_score map tops out at 1, a *_mean_raw map at ~20), so a
+    fixed slider range is either mostly dead or unable to reach the peak.
+    Returns (0.0, 1.0) when the file is unreadable or has no finite values.
+    """
+    from .labels import load_gifti_values
+
+    try:
+        values = load_gifti_values(Path(path))
+    except Exception:
+        return 0.0, 1.0
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return 0.0, 1.0
+    return float(finite.min()), float(finite.max())
 
 
 def clusters_by_contrast(cluster_map: dict[str, str]) -> dict[str, list[str]]:

@@ -179,6 +179,7 @@ def build_surface_figure(
     overlay_opacity: float = 0.86,
     surface_type: str = "inflated",
     drag_mode: str = "turntable",
+    legend_note: str | None = None,
 ):
     """Return (figure, overlay_path_or_None, [label_paths]).
 
@@ -241,10 +242,24 @@ def build_surface_figure(
             camera=dict(center=dict(x=center_x, y=0.0, z=0.0)),
         ),
         legend=dict(
-            x=0.0, xanchor="left", y=0.5, yanchor="middle",
+            # Top-anchored (rather than centred) so the note above it can't
+            # overlap the entries when a whole contrast is loaded.
+            x=0.0, xanchor="left", y=0.94 if legend_note else 0.5,
+            yanchor="top" if legend_note else "middle",
             bgcolor="rgba(255,255,255,0.92)", bordercolor=INK, borderwidth=1,
             font=dict(color=INK, size=13),
             itemsizing="constant", itemwidth=30, tracegroupgap=4,
         ),
     )
+    if legend_note:
+        # Sits at the head of the legend column, so the reading order is
+        # note -> clickable label entries.
+        fig.add_annotation(
+            text=legend_note, xref="paper", yref="paper",
+            x=0.0, xanchor="left", y=1.0, yanchor="top",
+            showarrow=False, align="left",
+            font=dict(color=INK, size=11),
+            bgcolor="rgba(255,255,255,0.92)", bordercolor=INK, borderwidth=1,
+            borderpad=3,
+        )
     return fig, opath, label_paths
