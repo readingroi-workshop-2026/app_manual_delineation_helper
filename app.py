@@ -138,8 +138,10 @@ with st.sidebar:
         )
     with s2:
         drag_mode = st.selectbox(
-            "Rotation", ["turntable", "orbit"],
-            help="turntable keeps a fixed up-axis while dragging; orbit is a free trackball.",
+            "Rotation", ["orbit", "turntable"],
+            help="orbit is a free trackball. turntable keeps a fixed up-axis, "
+                 "which snaps camera.up back to +Z and discards an oblique "
+                 "hand-rotated view.",
         )
 
     plot_sidebar = st.button(
@@ -319,7 +321,15 @@ if "fig_main_obj" in st.session_state:
                 st.code(p)
     st.plotly_chart(
         st.session_state["fig_main_obj"], width="stretch",
-        config={"displaylogo": False, "scrollZoom": True}, key="fig_main",
+        config={
+            "displaylogo": False, "scrollZoom": True,
+            # Plotly's turntable button forces camera.up back to +Z, which
+            # throws away a hand-rotated view (this surface is pre-rotated and
+            # rolled, so its up-axis is oblique). The sidebar's Rotation box
+            # covers the same setting without that side effect.
+            "modeBarButtonsToRemove": ["tableRotation"],
+        },
+        key="fig_main",
     )
 else:
     st.info("Configure the layers, then click **🔄 Update plot**.")

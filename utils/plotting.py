@@ -227,18 +227,31 @@ def build_surface_figure(
             name = spec.get("label_name") or lpath.stem
             (add_label_fill if fill else add_label_border)(fig, vertices, color, name, surface)
 
-    center_x = float((view or DEFAULT_VIEW).get("camera_center_x", 0.38))
+    v = {**DEFAULT_VIEW, **(view or {})}
+    center_x = float(v.get("camera_center_x", 0.38))
+    # Any rerun (a widget click, a legend toggle) makes plotly re-apply this
+    # layout, camera included, so a hand-rotated view would snap back to
+    # `scene.camera` below. uirevision tells plotly the interaction belongs to
+    # the same UI session and to keep the user's camera; keying it on the view
+    # means the Camera sliders and a subject/hemisphere/surface switch still
+    # reset the viewpoint on purpose.
+    ui_key = "{}|{}|{}|{}".format(sub, hemi_fs, surface_type, "|".join(
+        str(v.get(k)) for k in
+        ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x")
+    ))
     # The scene is white but Streamlit's dark theme colours plotly text white,
     # so title/legend text has to be pinned dark explicitly or it vanishes.
     fig.update_layout(
         title=dict(text=f"{sub} {hemi_fs} ({surface_type})", font=dict(color=INK)),
         autosize=True, height=760, margin=dict(l=0, r=0, t=32, b=0),
         paper_bgcolor="white",
+        uirevision=ui_key,
         scene=dict(
             bgcolor="white",
             xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
             aspectmode="data",
             dragmode=drag_mode,
+            uirevision=ui_key,
             camera=dict(center=dict(x=center_x, y=0.0, z=0.0)),
         ),
         legend=dict(
