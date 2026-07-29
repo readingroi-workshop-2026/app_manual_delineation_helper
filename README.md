@@ -15,7 +15,7 @@ download [`example_cluster_mapping.csv`](example_cluster_mapping.csv) and, for
 each ROI, write the cluster ID(s) that belong to it.
 
 ```csv
-sub,maunal_ROI(from posteroir to anteroir),cluster_id
+sub,maunal_ROI(from posterior to anterior),cluster_id
 11,OWA,"0,2"
 11,pOTS-words,3
 ```
