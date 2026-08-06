@@ -1,6 +1,11 @@
 sub,manual_ROI(from posterior to anterior),cluster_id
-11,OWA,"0,2"
-11,pOTS-words,3
-11,mOTS-words,"7,13"
-11,aOTS-words,"16,21,23"
-11,mFus-words,"17,20"
+1,IOG-words,"0,2"
+1,PON-words,3
+1,pOTS-words,"7,13"
+1,mOTS-words,"16,21,23"
+1,mFus-words,"17,20"
+2,IOG-words,"0,2"
+2,PON-words,3
+2,pOTS-words,"7,13"
+2,mOTS-words,"16,21,23"
+2,mFus-words,"17,20"
