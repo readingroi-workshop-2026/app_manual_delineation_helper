@@ -14,11 +14,14 @@ discovery / plotting).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import streamlit as st
+from streamlit_js_eval import streamlit_js_eval
 
 from utils import __version__
+from utils.camera import LIVE_READOUT_HTML, camera_to_view, wrap180
 from utils.config import load_config, normalize_hemi, normalize_sub, resolve_dir
 from utils.discovery import (
     CLUSTER_COLORS,
@@ -69,6 +72,169 @@ def _keep_valid(key: str, options: list) -> None:
 def _clear(*keys: str) -> None:
     for key in keys:
         st.session_state[key] = []
+
+
+# Viewpoint fields: label, session-state key suffix, min, max, step. Single
+# source of truth for the Camera sliders, the typed boxes and anything written
+# back by a capture — an unclamped write here makes the slider reject its own
+# session value on the next run (StreamlitValueBelowMinError).
+VIEW_FIELDS = (
+    ("azimuth", "Azimuth", "azimuth", -180.0, 180.0, 0.1),
+    ("elevation", "Elevation", "elevation", -90.0, 90.0, 0.1),
+    ("roll", "Roll", "roll", -180.0, 180.0, 0.1),
+    ("azim_offset", "Azim offset", "azim_offset", -180.0, 180.0, 0.1),
+    ("camera_center_x", "Center x", "center_x", -1.0, 1.0, 0.01),
+    ("zoom", "Zoom", "zoom", 0.2, 5.0, 0.05),
+)
+VIEW_RANGES = {f[0]: (f[3], f[4]) for f in VIEW_FIELDS}
+VIEW_STEPS = {f[0]: f[5] for f in VIEW_FIELDS}
+
+
+def _view_key(field: str, hemi_fs: str) -> str:
+    suffix = next(f[2] for f in VIEW_FIELDS if f[0] == field)
+    return f"{suffix}_{hemi_fs}"
+
+
+# Angles are cyclic: fold them into -180..180 rather than clipping, which would
+# silently throw away the view (-273.8 -> -180 instead of the equivalent 86.2).
+VIEW_CYCLIC = {"azimuth", "roll", "azim_offset"}
+
+
+def _clamp(field: str, value: float) -> float:
+    lo, hi = VIEW_RANGES[field]
+    value = wrap180(value) if field in VIEW_CYCLIC else float(value)
+    return min(max(value, lo), hi)
+
+
+def _per_label_style(names: list[str], panel: str,
+                     palette_offset: int = 0) -> dict[str, tuple[str, bool]]:
+    """One colour swatch + fill toggle per selected label.
+
+    Returns ``{name: (color, fill)}``. Each label keeps its own choice in
+    session_state, so re-selecting a label brings its colour back; defaults
+    walk the palette so two labels never start out identical.
+    """
+    styles: dict[str, tuple[str, bool]] = {}
+    if not names:
+        return styles
+    st.caption("colour · tick = filled patch (unticked = outline)")
+    for i, name in enumerate(names):
+        ckey, fkey = f"{panel}_col::{name}", f"{panel}_fill::{name}"
+        st.session_state.setdefault(
+            ckey, CLUSTER_COLORS[(i + palette_offset) % len(CLUSTER_COLORS)])
+        st.session_state.setdefault(fkey, False)
+        c1, c2 = st.columns([1, 3], vertical_alignment="center")
+        with c1:
+            st.color_picker(name, key=ckey, label_visibility="collapsed")
+        with c2:
+            st.checkbox(name, key=fkey)
+        styles[name] = (st.session_state[ckey], bool(st.session_state[fkey]))
+    return styles
+
+
+def _snapshot_name(sub: str, hemi_fs: str, surface_type: str,
+                   overlay_name: str, threshold: float) -> str:
+    """Filename for the modebar's PNG export, describing what is on screen."""
+    parts = [sub, hemi_fs, surface_type]
+    if overlay_name and overlay_name != "none":
+        parts += [overlay_name, f"thr{threshold:g}"]
+    return "_".join(parts)
+
+
+def _set_view_value(slider_key: str, box_key: str) -> None:
+    """Typed viewpoint value -> Camera slider, and force the surface to redraw."""
+    st.session_state[slider_key] = float(st.session_state[box_key])
+    st.session_state["force_plot"] = True
+
+
+def _apply_captured(captured: dict | None, hemi_fs: str) -> None:
+    """Push a captured viewpoint into the Camera sliders.
+
+    Called before the sliders are instantiated — that is the only moment a
+    widget's session_state entry may be written; assigning afterwards raises.
+    """
+    if not captured:
+        return
+    for field in VIEW_RANGES:
+        if field in captured:
+            st.session_state[_view_key(field, hemi_fs)] = _clamp(field, captured[field])
+    st.session_state["force_plot"] = True
+
+
+def _viewpoint_panel(view: dict, hemi_fs: str) -> None:
+    """Live readout of the dragged camera + capture it into the sliders."""
+    with st.expander("📐 Viewpoint — live camera readout", expanded=False):
+        st.caption(
+            "Drag the brain: these numbers update as you go. The button below "
+            "writes them into the sidebar's Camera sliders and redraws."
+        )
+        st.iframe(
+            LIVE_READOUT_HTML.replace("__VIEW__", json.dumps(
+                {k: view[k] for k in
+                 ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x")}
+            )),
+            height=180,
+        )
+        st.button(
+            "⬅ Copy readout into the sidebar sliders", key="capture_view",
+            width="stretch", type="primary",
+            help="Takes the viewpoint you dragged to and writes it into the "
+                 "Camera sliders, then redraws.",
+            on_click=lambda: st.session_state.update(
+                capture_wanted=True,
+                capture_n=st.session_state.get("capture_n", 0) + 1),
+        )
+
+        # Typed entry for the same six values. These write the Camera sliders'
+        # session_state keys from an on_change callback (the only safe moment —
+        # the sliders were already instantiated higher up this run) and ask for
+        # a rebuild, so a typed number moves the surface straight away.
+        st.caption("Type exact values — the plot redraws on Enter.")
+        cols = st.columns(3)
+        for i, (field, label, _, lo, hi, step) in enumerate(VIEW_FIELDS):
+            slider_key = _view_key(field, hemi_fs)
+            box_key = f"num_{slider_key}"
+            # Mirror the slider into the box each run so the two never drift.
+            st.session_state[box_key] = _clamp(field, view[field])
+            with cols[i % 3]:
+                st.number_input(label, lo, hi, step=step, format="%.2f", key=box_key,
+                                on_change=_set_view_value, args=(slider_key, box_key))
+
+        # Must render on every run, not only on the click: streamlit_js_eval
+        # returns None on the run that mounts it and delivers the value on a
+        # later rerun, so a component that only exists during the click run
+        # disappears before its answer arrives.
+        cam = streamlit_js_eval(
+            js_expressions=(
+                "(() => {const d = window.parent.document;"
+                " const gd = d.querySelector('.stPlotlyChart .js-plotly-plot')"
+                "         || d.querySelector('.js-plotly-plot');"
+                " const s = gd && (gd._fullLayout?.scene || gd.layout?.scene);"
+                " return s && s.camera ? JSON.stringify(s.camera) : null;})()"
+            ),
+            key=f"grab_camera_{st.session_state.get('capture_n', 0)}",
+            want_output=True,
+        )
+        # Consume it ONLY when the button asked for it. Acting on every change
+        # loops forever: applying a capture rebuilds the figure, which moves the
+        # camera, which looks like a new capture, which rebuilds again...
+        if cam and st.session_state.pop("capture_wanted", False):
+            captured = camera_to_view(json.loads(cam), view)
+            st.session_state["captured_view"] = captured
+            # Applied at the top of the next run: the Camera sliders already
+            # exist by the time this panel renders, and a widget's state can
+            # only be written before it is instantiated.
+            st.session_state["pending_capture"] = captured
+            st.rerun()
+
+        captured = st.session_state.get("captured_view")
+        if captured:
+            snippet = ",\n".join(f'        "{k}": {captured[k]}' for k in
+                                 ("azimuth", "elevation", "roll", "azim_offset",
+                                  "camera_center_x", "zoom"))
+            st.caption("Paste into `DEFAULT_VIEWS` in `utils/surface.py` to make it the preset:")
+            st.code(f'"{hemi_fs}": {{\n{snippet},\n        "convention": "inv_zx",\n    }},',
+                    language="python")
 
 
 def _threshold_widgets(overlay_path: str | None, overlay_name: str) -> float:
@@ -152,12 +318,28 @@ with st.sidebar:
         # Per-hemisphere slider state: keys are hemi-suffixed, so switching lh/rh
         # loads that hemisphere's stored preset and keeps its tweaks independent.
         base_view = default_view(hemi_input)
+        _apply_captured(st.session_state.pop("pending_capture", None), hemi_fs)
+
+        def _cam_slider(label, field, help=None):
+            # Seed from the preset instead of passing `value=` (Streamlit warns
+            # when a widget has both a default and a session_state value), and
+            # clamp: a capture or an old session can hold an out-of-range value,
+            # and the slider would reject its own state.
+            lo, hi = VIEW_RANGES[field]
+            step = VIEW_STEPS[field]
+            key = _view_key(field, hemi_fs)
+            st.session_state[key] = _clamp(
+                field, st.session_state.get(key, base_view.get(field, 0.0)))
+            return st.slider(label, lo, hi, step=step, key=key, help=help)
+
         view = {
-            "azimuth": st.slider("Azimuth", -180.0, 180.0, float(base_view["azimuth"]), key=f"azimuth_{hemi_fs}"),
-            "elevation": st.slider("Elevation", -90.0, 90.0, float(base_view["elevation"]), key=f"elevation_{hemi_fs}"),
-            "roll": st.slider("Roll", -180.0, 180.0, float(base_view["roll"]), key=f"roll_{hemi_fs}"),
-            "azim_offset": st.slider("Azimuth offset", -180.0, 180.0, float(base_view["azim_offset"]), key=f"azim_offset_{hemi_fs}"),
-            "camera_center_x": st.slider("Camera center x", -1.0, 1.0, float(base_view["camera_center_x"]), key=f"center_x_{hemi_fs}"),
+            "azimuth": _cam_slider("Azimuth", "azimuth"),
+            "elevation": _cam_slider("Elevation", "elevation"),
+            "roll": _cam_slider("Roll", "roll"),
+            "azim_offset": _cam_slider("Azimuth offset", "azim_offset"),
+            "camera_center_x": _cam_slider("Camera center x", "camera_center_x"),
+            "zoom": _cam_slider("Zoom", "zoom",
+                                help="Pulls the camera toward the surface; >1 closer, <1 further."),
             "convention": base_view.get("convention", "inv_zx"),
         }
 
@@ -229,8 +411,7 @@ with col3:
         atlas_map = surface_labels_in(str(resolve_dir(config, atlas_tmpl, sub)), hemi_fs)
         _keep_valid("atlas_sel", list(atlas_map))
         selected_atlas = st.multiselect("Labels", list(atlas_map), key="atlas_sel")
-        atlas_color = st.color_picker("Color", value="#000000", key="atlas_color")
-        atlas_fill = st.checkbox("Fill", value=False, key="atlas_fill")
+        atlas_styles = _per_label_style(selected_atlas, "atlas")
         st.button("Clear all", key="clear_atlas_btn", on_click=_clear, args=("atlas_sel",))
         plot_3 = st.button("🔄 Plot", width="stretch", key="plot_btn_3")
 
@@ -244,7 +425,7 @@ with col4:
         manual_map = surface_labels_in(str(resolve_dir(config, manual_tmpl, sub)), hemi_fs)
         _keep_valid("manual_sel", list(manual_map))
         selected_manual = st.multiselect("Labels", list(manual_map), key="manual_sel")
-        manual_fill = st.checkbox("Fill", value=False, key="manual_fill")
+        manual_styles = _per_label_style(selected_manual, "manual", palette_offset=9)
         st.button("Clear all", key="clear_manual_btn", on_click=_clear, args=("manual_sel",))
         plot_4 = st.button("🔄 Plot", width="stretch", key="plot_btn_4")
 
@@ -263,20 +444,15 @@ for i, name in enumerate(n for n in cluster_map if n in chosen):
         "fill": cluster_fill,
         "label_name": name,
     })
-for name in selected_atlas:
-    clusters.append({
-        "label_path": atlas_map[name],
-        "color": atlas_color,
-        "fill": atlas_fill,
-        "label_name": name,
-    })
-for i, name in enumerate(selected_manual):
-    clusters.append({
-        "label_path": manual_map[name],
-        "color": CLUSTER_COLORS[(i + 9) % len(CLUSTER_COLORS)],
-        "fill": manual_fill,
-        "label_name": name,
-    })
+# Layers 3 and 4: colour and fill are per label, set in the panel.
+for label_map, styles in ((atlas_map, atlas_styles), (manual_map, manual_styles)):
+    for name, (color, fill) in styles.items():
+        clusters.append({
+            "label_path": label_map[name],
+            "color": color,
+            "fill": fill,
+            "label_name": name,
+        })
 
 overlay_path = None if overlay_name == "none" else overlays.get(overlay_name)
 
@@ -292,7 +468,8 @@ legend_note = ("Cluster IDs: posterior → anterior<br>(higher index = more ante
 # clicks the last figure is served from session_state, so tweaking widgets is
 # instant and the surface updates only on demand.
 # ---------------------------------------------------------------------------
-do_plot = bool(plot_sidebar or plot_1 or plot_2 or plot_3 or plot_4)
+do_plot = bool(plot_sidebar or plot_1 or plot_2 or plot_3 or plot_4
+               or st.session_state.pop("force_plot", False))
 need_build = do_plot or "fig_main_obj" not in st.session_state
 
 if need_build:
@@ -321,15 +498,22 @@ if "fig_main_obj" in st.session_state:
                 st.code(p)
     st.plotly_chart(
         st.session_state["fig_main_obj"], width="stretch",
+        # Both rotation buttons stay in the modebar, but the sidebar's Rotation
+        # box is the intended control: plotly's turntable button forces
+        # camera.up back to +Z, which discards an oblique hand-rotated view.
         config={
             "displaylogo": False, "scrollZoom": True,
-            # Plotly's turntable button forces camera.up back to +Z, which
-            # throws away a hand-rotated view (this surface is pre-rotated and
-            # rolled, so its up-axis is oblique). The sidebar's Rotation box
-            # covers the same setting without that side effect.
-            "modeBarButtonsToRemove": ["tableRotation"],
+            # Modebar camera icon: exports the plot area only. Default is
+            # screen resolution named newplot.png — neither is useful for a
+            # figure, so name it after what is on screen and render at 3x.
+            "toImageButtonOptions": {
+                "format": "png", "filename": _snapshot_name(
+                    sub, hemi_fs, surface_type, overlay_name, overlay_threshold),
+                "scale": 3,
+            },
         },
         key="fig_main",
     )
+    _viewpoint_panel(view, hemi_fs)
 else:
     st.info("Configure the layers, then click **🔄 Update plot**.")

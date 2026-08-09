@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import plotly.graph_objects as go
 
+from .camera import zoom_to_eye
 from .config import normalize_hemi, normalize_sub
 from .labels import load_gifti_values, read_label_vertices
 from .surface import DEFAULT_VIEW, load_surface, rotate_to_view, vertex_normals
@@ -178,7 +179,7 @@ def build_surface_figure(
     overlay_threshold: float = 1e-6,
     overlay_opacity: float = 0.86,
     surface_type: str = "inflated",
-    drag_mode: str = "turntable",
+    drag_mode: str = "orbit",   # free trackball; turntable resets camera.up to +Z
     legend_note: str | None = None,
 ):
     """Return (figure, overlay_path_or_None, [label_paths]).
@@ -237,7 +238,7 @@ def build_surface_figure(
     # reset the viewpoint on purpose.
     ui_key = "{}|{}|{}|{}".format(sub, hemi_fs, surface_type, "|".join(
         str(v.get(k)) for k in
-        ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x")
+        ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x", "zoom")
     ))
     # The scene is white but Streamlit's dark theme colours plotly text white,
     # so title/legend text has to be pinned dark explicitly or it vanishes.
@@ -252,7 +253,10 @@ def build_surface_figure(
             aspectmode="data",
             dragmode=drag_mode,
             uirevision=ui_key,
-            camera=dict(center=dict(x=center_x, y=0.0, z=0.0)),
+            camera=dict(
+                center=dict(x=center_x, y=0.0, z=0.0),
+                eye=zoom_to_eye(center_x, v.get("zoom", 1.0)),
+            ),
         ),
         legend=dict(
             # Top-anchored (rather than centred) so the note above it can't

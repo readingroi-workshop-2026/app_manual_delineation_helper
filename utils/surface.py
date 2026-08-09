@@ -17,6 +17,7 @@ DEFAULT_VIEWS = {
         "roll": 90.0,
         "azim_offset": 110.0,
         "camera_center_x": 0.38,
+        "zoom": 1.0,
         "convention": "inv_zx",
     },
     "rh": {
@@ -25,6 +26,7 @@ DEFAULT_VIEWS = {
         "roll": -100.0,
         "azim_offset": -25.0,
         "camera_center_x": 0.0,
+        "zoom": 1.0,
         "convention": "inv_zx",
     },
 }

@@ -4,3 +4,4 @@ numpy
 nibabel
 pyyaml
 watchdog>=4
+streamlit-js-eval>=1.0

@@ -14,6 +14,7 @@ dependencies = [
     # polling and prints a "For better performance, install the Watchdog
     # module" warning at startup.
     "watchdog>=4",
+    "streamlit-js-eval>=1.0.0",
 ]
 
 # This is an app, not a distributable package: tell uv to manage the

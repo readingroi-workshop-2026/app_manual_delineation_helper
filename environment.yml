@@ -19,3 +19,7 @@ dependencies:
   # Native filesystem-event watcher; without it Streamlit falls back to polling
   # and warns at startup.
   - watchdog>=4
+  # Not on conda-forge; installed with pip inside the conda env.
+  - pip
+  - pip:
+      - streamlit-js-eval>=1.0
