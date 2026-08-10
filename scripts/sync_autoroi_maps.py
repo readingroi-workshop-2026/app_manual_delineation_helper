@@ -46,10 +46,32 @@ ANALYSIS = "analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15"
 # This file lives in <repo>/scripts/, so the repo root is one level up.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+DATA_DIR_FALLBACK = "example_dataset"
+
+
+def _repo_data_dir() -> Path:
+    """The repo's bundled data root, as named by config.yaml's `repo_data_dir`.
+
+    Read from the config rather than hardcoded so that renaming the data
+    directory only ever has to happen in one place.  pyyaml is a dependency of
+    the app but not of every env this script gets run from, so a missing import
+    degrades to the fallback instead of failing.
+    """
+    try:
+        import yaml
+
+        cfg = yaml.safe_load((REPO_ROOT / "config.yaml").read_text()) or {}
+        raw = cfg.get("repo_data_dir") or cfg.get("data_dir") or DATA_DIR_FALLBACK
+    except Exception:
+        raw = DATA_DIR_FALLBACK
+    p = Path(str(raw)).expanduser()
+    return p if p.is_absolute() else REPO_ROOT / p
+
+
 SRC_DEFAULT = (
     "/bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives/autoROI/individual/" + ANALYSIS
 )
-DST_DEFAULT = str(REPO_ROOT / "ROI_delineation_DATA" / "autoROI" / "individual" / ANALYSIS)
+DST_DEFAULT = str(_repo_data_dir() / "autoROI" / "individual" / ANALYSIS)
 
 # Source-side contrast names.  Keep in sync with rename_contrasts.py.
 RENAME: Dict[str, str] = {

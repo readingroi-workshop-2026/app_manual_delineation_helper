@@ -10,7 +10,7 @@
 # Rule for either path: relative -> resolved next to this config file;
 # absolute -> used as-is.
 data_source: repo
-repo_data_dir: ROI_delineation_DATA
+repo_data_dir: example_dataset
 disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
 
 # fs_dir: FreeSurfer subject dir (relative to the chosen data root) — used to
@@ -37,4 +37,5 @@ clusters_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15
 atlas_label_dir: freesurfer-with_t2/{sub}/label
 
 # Layer 4 — user-defined manual labels (lh.*.label)
-manual_label_dir: freesurfer-with_t2/{sub}/label/manual-v1
+manual_label_dir: freesurfer-with_t2/{sub}/label/user_path
+
