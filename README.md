@@ -397,7 +397,7 @@ fs_dir: freesurfer-with_t2          # surface geometry: <data_root>/<fs_dir>/<su
 default_subject: "02"
 default_hemi: lh
 default_surface: inflated
-default_contrast: RWvsPER
+default_contrast: RWvsSC
 heatmap_dir:      autoROI/individual/analysis-27.../{sub}
 clusters_dir:     autoROI/individual/analysis-27.../{sub}/labels
 atlas_label_dir:  freesurfer-with_t2/{sub}/label

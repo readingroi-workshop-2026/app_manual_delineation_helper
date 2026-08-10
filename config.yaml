@@ -25,7 +25,7 @@ fs_dir: freesurfer-with_t2
 default_subject: "02"
 default_hemi: lh
 default_surface: inflated
-default_contrast: RWvsPER
+default_contrast: RWvsSC
 
 # Layer 1 — heatmap overlays (*.func.gii)
 heatmap_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}

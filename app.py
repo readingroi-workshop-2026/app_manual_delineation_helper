@@ -361,7 +361,7 @@ with col1:
         )
         overlays = heatmap_overlays_in(str(resolve_dir(config, heatmap_tmpl, sub)), hemi_bids)
         overlay_choices = ["none"] + list(overlays.keys())
-        default_overlay = f"{config.get('default_contrast', 'RWvsPER')}_score"
+        default_overlay = f"{config.get('default_contrast', 'RWvsSC')}_score"
         overlay_name = st.selectbox(
             "Overlay", overlay_choices,
             index=overlay_choices.index(default_overlay) if default_overlay in overlay_choices else 0,

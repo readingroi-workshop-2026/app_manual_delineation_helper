@@ -47,7 +47,7 @@ CLUSTER_COLORS = [
 def heatmap_overlays_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     """`*.func.gii` overlays in a directory, for the given hemisphere.
 
-    Display name is the descriptive tail (e.g. 'RWvsPER_scaled') when the BIDS
+    Display name is the descriptive tail (e.g. 'RWvsSC_scaled') when the BIDS
     'desc-*' pattern is present, otherwise the bare filename. Only files whose
     name carries the matching `hemi-<L|R>` tag are kept (files with no hemi tag
     are always shown).
