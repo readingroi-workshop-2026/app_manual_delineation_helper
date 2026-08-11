@@ -164,17 +164,29 @@ def _apply_captured(captured: dict | None, hemi_fs: str) -> None:
 def _viewpoint_panel(view: dict, hemi_fs: str) -> None:
     """Live readout of the dragged camera + capture it into the sliders."""
     with st.expander("📐 Viewpoint — live camera readout", expanded=False):
-        st.caption(
-            "Drag the brain: these numbers update as you go. The button below "
-            "writes them into the sidebar's Camera sliders and redraws."
+        # Off by default: while on, the readout listens to every drag event and
+        # recomputes on each frame. Switch it on to find an angle, copy the
+        # numbers across, switch it off again — nothing then watches the plot.
+        live = st.toggle(
+            "Live readout", key="live_readout_on",
+            help="Watches the plot and recomputes while you drag. Turn it off "
+                 "once you have copied the viewpoint you want — the numbers "
+                 "already in the sidebar are unaffected.",
         )
-        st.iframe(
-            LIVE_READOUT_HTML.replace("__VIEW__", json.dumps(
-                {k: view[k] for k in
-                 ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x")}
-            )),
-            height=180,
-        )
+        if live:
+            st.caption(
+                "Drag the brain: these numbers update as you go. The button "
+                "below writes them into the sidebar's Camera sliders and redraws."
+            )
+            st.iframe(
+                LIVE_READOUT_HTML.replace("__VIEW__", json.dumps(
+                    {k: view[k] for k in
+                     ("azimuth", "elevation", "roll", "azim_offset", "camera_center_x")}
+                )),
+                height=180,
+            )
+        else:
+            st.caption("Readout off. Switch it on to watch the viewpoint while you drag.")
         st.button(
             "⬅ Copy readout into the sidebar sliders", key="capture_view",
             width="stretch", type="primary",
@@ -204,17 +216,22 @@ def _viewpoint_panel(view: dict, hemi_fs: str) -> None:
         # returns None on the run that mounts it and delivers the value on a
         # later rerun, so a component that only exists during the click run
         # disappears before its answer arrives.
-        cam = streamlit_js_eval(
-            js_expressions=(
-                "(() => {const d = window.parent.document;"
-                " const gd = d.querySelector('.stPlotlyChart .js-plotly-plot')"
-                "         || d.querySelector('.js-plotly-plot');"
-                " const s = gd && (gd._fullLayout?.scene || gd.layout?.scene);"
-                " return s && s.camera ? JSON.stringify(s.camera) : null;})()"
-            ),
-            key=f"grab_camera_{st.session_state.get('capture_n', 0)}",
-            want_output=True,
-        )
+        # Only mounted when it has something to do: while the readout is on, or
+        # while a copy is in flight. With both off, nothing here touches the
+        # plot on a rerun.
+        cam = None
+        if live or st.session_state.get("capture_wanted"):
+            cam = streamlit_js_eval(
+                js_expressions=(
+                    "(() => {const d = window.parent.document;"
+                    " const gd = d.querySelector('.stPlotlyChart .js-plotly-plot')"
+                    "         || d.querySelector('.js-plotly-plot');"
+                    " const s = gd && (gd._fullLayout?.scene || gd.layout?.scene);"
+                    " return s && s.camera ? JSON.stringify(s.camera) : null;})()"
+                ),
+                key=f"grab_camera_{st.session_state.get('capture_n', 0)}",
+                want_output=True,
+            )
         # Consume it ONLY when the button asked for it. Acting on every change
         # loops forever: applying a capture rebuilds the figure, which moves the
         # camera, which looks like a new capture, which rebuilds again...
@@ -309,6 +326,13 @@ with st.sidebar:
                  "which snaps camera.up back to +Z and discards an oblique "
                  "hand-rotated view.",
         )
+
+    # Display-only: applied when the chart is rendered, so dragging this
+    # resizes the viewer immediately without rebuilding the mesh.
+    plot_height = st.slider(
+        "Viewer height (px)", 500, 1600, 900, 20, key="plot_height",
+        help="Taller viewer. The surface scales with it; no re-plot needed.",
+    )
 
     plot_sidebar = st.button(
         "🔄 Update plot", type="primary", width="stretch", key="plot_sidebar",
@@ -497,7 +521,7 @@ if "fig_main_obj" in st.session_state:
             for p in missing:
                 st.code(p)
     st.plotly_chart(
-        st.session_state["fig_main_obj"], width="stretch",
+        st.session_state["fig_main_obj"], width="stretch", height=plot_height,
         # Both rotation buttons stay in the modebar, but the sidebar's Rotation
         # box is the intended control: plotly's turntable button forces
         # camera.up back to +Z, which discards an oblique hand-rotated view.
