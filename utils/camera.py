@@ -205,20 +205,33 @@ function findPlot() {
   const doc = window.parent.document;
   return doc.querySelector(".stPlotlyChart .js-plotly-plot") || doc.querySelector(".js-plotly-plot");
 }
+const EVENTS = ["plotly_relayouting", "plotly_relayout", "plotly_afterplot"];
+
+function detach(gd) {
+  // Drop handlers belonging to an earlier instance of this iframe. Left in
+  // place they would fire from a destroyed JS context and could break the
+  // other listeners plotly calls in the same loop (Streamlit syncs its figure
+  // state on plotly_relayout). Only ours are removed, never anyone else's.
+  if (!gd || !gd.__camHandlers) return;
+  gd.__camHandlers.forEach(([ev, fn]) => gd.removeListener && gd.removeListener(ev, fn));
+  gd.__camHandlers = null;
+}
 function attach() {
   const gd = findPlot();
   if (!gd || !gd.on) { setTimeout(attach, 400); return; }
-  if (gd.__camWatch) return;
-  gd.__camWatch = true;
+  detach(gd);                       // toggling the readout off and on re-attaches cleanly
   const read = () => {
     const cam = (gd._fullLayout && gd._fullLayout.scene && gd._fullLayout.scene.camera) ||
                 (gd.layout && gd.layout.scene && gd.layout.scene.camera);
     if (cam && cam.eye) draw(cam);
   };
   // relayouting fires continuously during a drag, relayout once at the end.
-  gd.on("plotly_relayouting", read);
-  gd.on("plotly_relayout", read);
-  gd.on("plotly_afterplot", read);
+  gd.__camHandlers = EVENTS.map(ev => { gd.on(ev, read); return [ev, read]; });
+  // Streamlit removes this iframe when the readout is switched off; unhook
+  // first so nothing keeps listening to the plot.
+  const bye = () => detach(gd);
+  window.addEventListener("pagehide", bye);
+  window.addEventListener("unload", bye);
   read();
 }
 attach();

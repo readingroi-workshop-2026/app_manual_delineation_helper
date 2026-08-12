@@ -244,7 +244,7 @@ def build_surface_figure(
     # so title/legend text has to be pinned dark explicitly or it vanishes.
     fig.update_layout(
         title=dict(text=f"{sub} {hemi_fs} ({surface_type})", font=dict(color=INK)),
-        autosize=True, height=760, margin=dict(l=0, r=0, t=32, b=0),
+        autosize=True, height=900, margin=dict(l=0, r=0, t=32, b=0),
         paper_bgcolor="white",
         uirevision=ui_key,
         scene=dict(

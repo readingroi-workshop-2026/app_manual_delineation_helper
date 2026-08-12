@@ -37,9 +37,9 @@ offered candidates belong to which ROI.
 >    raters can be compared afterwards.
 > 3. Fill it in: for each ROI name **we agreed on in the first meeting**, write
 >    the cluster ID(s) you assign to it.
->
+> 4. In the 4th column, you can put comment regarding the clusters that you are hesitating
 > ```csv
-> sub,manual_ROI(from posterior to anterior),cluster_id
+> sub,manual_ROI(from posterior to anterior),cluster_id(From RWvsSC_score),comment
 > 1,IOG-words,"0,2"
 > 1,PON-words,3
 > 1,pOTS-words,3
@@ -128,10 +128,16 @@ readout**: while you drag, it shows the viewpoint you are currently looking at,
 in the same six parameters the sidebar uses — azimuth, elevation, roll, azimuth
 offset, centre x and zoom.
 
+It is behind a **Live readout** switch, off by default. While it is on, it
+listens to every drag event and recomputes on each frame, so the intended cycle
+is: **switch it on → drag until the view is right → copy the numbers into the
+sidebar → switch it off.** With the switch off nothing watches the plot at all.
+
 **Remember to move those values into the sidebar** once you have found an angle
 worth keeping. Either press **⬅ Copy readout into the sidebar sliders**, or type
 them into the boxes underneath (the plot redraws on Enter). Until you do, the
-sidebar still holds the old view and the next rebuild will snap back to it.
+sidebar still holds the old view and the next rebuild will snap back to it. The
+copy button works whether the readout is on or off.
 
 To keep a viewpoint **permanently** — across restarts, for everybody — paste the
 `DEFAULT_VIEWS` snippet the panel prints into `utils/surface.py`. That is how the
