@@ -42,9 +42,14 @@ app = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
 # This file lives in <repo>/scripts/, so the repo root is one level up.
 REPO_DEFAULT = str(Path(__file__).resolve().parents[1])
 
+# Keep in sync with sync_autoroi_maps.py's RENAME.  _apply() substitutes
+# longest-token-first, which is load-bearing: "CSvsAllnoCSnoWord" is a prefix
+# of "CSvsAllnoCSnoWordnoFF", so the longer key must be consumed first.
 MAPPING_DEFAULT: Dict[str, str] = {
     "CSvsAllnoCSnoWordnoFF": "CSvsAllNotext",
+    "CSvsAllnoCSnoWord": "CSvsAllnoletterstring",
     "RWvsAllnoWordnoLEX": "RWvsAllNotext",
+    "RWvsAllnoRWnoCS": "RWvsAllnoletterstring",
     "RWvsPER": "RWvsSC",
 }
 

@@ -74,20 +74,31 @@ SRC_DEFAULT = (
 DST_DEFAULT = str(_repo_data_dir() / "autoROI" / "individual" / ANALYSIS)
 
 # Source-side contrast names.  Keep in sync with rename_contrasts.py.
+#
+# Order matters only via _apply(), which substitutes longest-token-first.  That
+# is load-bearing here: "CSvsAllnoCSnoWord" is a prefix of
+# "CSvsAllnoCSnoWordnoFF", so the longer key must be consumed first or the
+# noFF maps would come out as "CSvsAllNotextnoFF".
 RENAME: Dict[str, str] = {
     "CSvsAllnoCSnoWordnoFF": "CSvsAllNotext",
+    "CSvsAllnoCSnoWord": "CSvsAllnoletterstring",
     "RWvsAllnoWordnoLEX": "RWvsAllNotext",
+    "RWvsAllnoRWnoCS": "RWvsAllnoletterstring",
     "RWvsPER": "RWvsSC",
 }
 
 # Every contrast the repo currently carries, named as they appear in --src.
 CONTRAST_DEFAULT = [
+    "CSvsAllnoCSnoWord",
     "CSvsAllnoCSnoWordnoFF",
     "FacesvsAllnoFace",
     "FacesvsAllnoFacenoCS",
     "LimbsvsAllnoLimbs",
     "LimbsvsAllnoLimbsnoCS",
     "RWvsAllnoWordnoLEX",
+    # RW vs everything except CS.  Only sub-01 has been through s2/s3 so far;
+    # the sync simply finds nothing for the other subjects until they are run.
+    "RWvsAllnoRWnoCS",
     "RWvsFF",
     "RWvsPER",
 ]
