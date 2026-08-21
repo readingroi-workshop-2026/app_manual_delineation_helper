@@ -1,5 +1,8 @@
 # Manual delineation helper (Streamlit surface viewer)
 
+[![DOI](https://zenodo.org/badge/1315063607.svg)](https://doi.org/10.5281/zenodo.22044800)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ## What this is for
 
 **A light and fast surface viewer for labels and heatmaps.** It started as a

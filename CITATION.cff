@@ -24,9 +24,7 @@ keywords:
   - region of interest
   - visual word form area
   - streamlit
-# TODO: uncomment and fill in after the first Zenodo-linked GitHub release.
-# The DOI does not exist until then — do not invent a number.
-# identifiers:
-#   - type: doi
-#     value: 10.5281/zenodo.XXXXXXX
-#     description: Concept DOI for all versions
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22044800
+    description: Concept DOI — always resolves to the latest version
