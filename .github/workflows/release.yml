@@ -1,0 +1,111 @@
+name: release
+
+# Push a tag and everything else happens:
+#
+#   git tag -a v0.2.0 -m "v0.2.0" && git push origin v0.2.0
+#
+# Zenodo is NOT driven from here. It subscribes to GitHub's release webhook, so
+# the DOI is minted only if the repo toggle is already ON at
+# https://zenodo.org/account/settings/github/ BEFORE the release is published.
+# Releases made while the toggle is off are never archived and get no DOI.
+#
+# Note this project is an application, not a distributable package
+# (`[tool.uv] package = false`, no [build-system], no [project.scripts]), so
+# there is no wheel to build or entry point to smoke-test. The checks below
+# verify the environment resolves and the sources import instead.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write        # required to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # full history so release notes can diff tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Version drift is the failure mode that matters: a tag disagreeing with
+      # pyproject.toml or CITATION.cff mints a DOI describing the wrong version,
+      # and a DOI cannot be edited afterwards. Fail before publishing.
+      - name: Check tag matches pyproject.toml, CITATION.cff and CHANGELOG.md
+        run: |
+          python - <<'PY'
+          import os, re, sys, tomllib, pathlib
+          ref = os.environ.get("GITHUB_REF_NAME", "")
+          if not ref.startswith("v"):
+              sys.exit(f"::error::tag {ref!r} does not start with 'v'")
+          tag = ref[1:]
+
+          problems = []
+
+          proj = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          if proj != tag:
+              problems.append(f"pyproject.toml version {proj!r} != tag {tag!r}")
+
+          cff = pathlib.Path("CITATION.cff")
+          if cff.exists():
+              text = cff.read_text()
+              m = re.search(r"^version:\s*(\S+)\s*$", text, re.M)
+              if not m:
+                  problems.append("CITATION.cff has no 'version:' field")
+              elif m.group(1).strip("\"'") != tag:
+                  problems.append(f"CITATION.cff version {m.group(1)!r} != tag {tag!r}")
+              if not re.search(r"^date-released:\s*(\S+)\s*$", text, re.M):
+                  problems.append("CITATION.cff has no 'date-released:' field")
+          else:
+              print("::warning::no CITATION.cff — Zenodo will fall back to "
+                    "repository metadata for the DOI record")
+
+          # This project keeps a hand-written CHANGELOG; a release with no entry
+          # is almost always a forgotten edit rather than a deliberate one.
+          chg = pathlib.Path("CHANGELOG.md")
+          if chg.exists() and not re.search(rf"^## \[{re.escape(tag)}\]", chg.read_text(), re.M):
+              problems.append(f"CHANGELOG.md has no '## [{tag}]' section")
+
+          for p in problems:
+              print(f"::error::{p}")
+          sys.exit(1 if problems else 0)
+          PY
+
+      - name: Validate CITATION.cff
+        run: |
+          if [ -f CITATION.cff ]; then
+            pip install --quiet cffconvert
+            cffconvert --validate
+          fi
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      # The lockfile is committed, so --frozen proves it still matches
+      # pyproject.toml rather than silently re-resolving.
+      - name: Resolve the environment from the committed lockfile
+        run: |
+          "$HOME/.local/bin/uv" sync --frozen
+
+      # No console scripts to exercise. Importing app.py would execute Streamlit
+      # page code, so compile every source instead — this catches a syntax error
+      # or a bad import path before it reaches a permanent DOI.
+      - name: Compile all sources
+        run: |
+          "$HOME/.local/bin/uv" run python -m compileall -q app.py utils scripts
+          "$HOME/.local/bin/uv" run python -c "import utils.config, utils.discovery, utils.labels"
+          echo "sources OK"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true      # auto changelog from merged PRs/commits
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'b') }}

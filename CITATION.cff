@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+title: "VOTCLOC surface viewer (app_manual_delineation_helper)"
+message: "If you use this software, please cite it as below."
+type: software
+abstract: >-
+  Streamlit surface viewer for VOTCLOC manual ROI delineation: renders an
+  inflated or pial FreeSurfer surface for either hemisphere with a statistical
+  heatmap overlay and atlas or manually drawn labels, to support interactive
+  delineation of reading-related regions in ventral occipitotemporal cortex.
+authors:
+  - family-names: Lei
+    given-names: Yongning
+    email: t.lei@bcbl.eu
+    orcid: https://orcid.org/0009-0000-3317-8006
+    affiliation: "BCBL — Basque Center on Cognition, Brain and Language"
+repository-code: "https://github.com/readingroi-workshop-2026/app_manual_delineation_helper"
+license: MIT
+version: 0.1.0
+date-released: "2026-07-28"
+keywords:
+  - neuroimaging
+  - FreeSurfer
+  - surface-based analysis
+  - region of interest
+  - visual word form area
+  - streamlit
+# TODO: uncomment and fill in after the first Zenodo-linked GitHub release.
+# The DOI does not exist until then — do not invent a number.
+# identifiers:
+#   - type: doi
+#     value: 10.5281/zenodo.XXXXXXX
+#     description: Concept DOI for all versions
