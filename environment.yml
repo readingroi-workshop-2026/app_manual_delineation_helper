@@ -19,6 +19,9 @@ dependencies:
   # Native filesystem-event watcher; without it Streamlit falls back to polling
   # and warns at startup.
   - watchdog>=4
+  # CLI + console output for the scripts/ helpers.
+  - typer>=0.12
+  - rich>=13
   # Not on conda-forge; installed with pip inside the conda env.
   - pip
   - pip:

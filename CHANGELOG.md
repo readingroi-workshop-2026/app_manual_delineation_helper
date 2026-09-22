@@ -3,6 +3,17 @@
 All notable changes to the VOTCLOC surface viewer are documented here.
 This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [Unreleased]
+
+### Added
+- `scripts/gen_manual_label.py`: build FreeSurfer manual labels from a rater's
+  `cluster_mapping.csv` by merging the listed auto-cluster labels of one
+  contrast (`--contrast`, default `RWvsAllNotext`) into one label per ROI,
+  written under `<sub>/label/<out-name>/` or a local `--out-dir`. Validates
+  the whole sheet before writing; `--list-contrasts` shows what is on disk.
+- `typer` and `rich` are now declared dependencies (the `scripts/` helpers
+  already used them).
+
 ## [0.1.0] — 2026-07-28
 
 First tagged release.

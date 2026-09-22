@@ -5,3 +5,5 @@ nibabel
 pyyaml
 watchdog>=4
 streamlit-js-eval>=1.0
+typer>=0.12
+rich>=13

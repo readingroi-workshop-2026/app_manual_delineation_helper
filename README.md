@@ -53,6 +53,10 @@ offered candidates belong to which ROI.
 > One row per ROI, ordered posterior → anterior; several clusters go in one
 > quoted field (`"0,2"`) so the file stays three columns. The app writes
 > nothing — that CSV is your output.
+>
+> 5. Turn the finished sheet into FreeSurfer labels with
+>    [`scripts/gen_manual_label.py`](scripts/gen_manual_label.py)
+>    (see [Generating manual labels from the sheet](#generating-manual-labels-from-the-sheet)).
 
 ---
 
@@ -111,6 +115,37 @@ freesurfer-with_t2/<sub>/label/manual-v1/lh.my-ROI.label   # one layer deeper
 Point `manual_label_dir` at whichever level holds the files (the panel's text
 box takes a new path live, no restart), and the panel lists every
 `<hemi>.*.label` it finds there. Only the selected hemisphere's files show up.
+
+### Generating manual labels from the sheet
+
+`scripts/gen_manual_label.py` reads a filled-in `<rater>_cluster_mapping.csv`,
+merges the listed cluster labels of one contrast into one FreeSurfer label per
+ROI, and writes them where panel 4 looks by default:
+
+```bash
+uv run scripts/gen_manual_label.py --list-contrasts --sub 01        # what is on disk
+uv run scripts/gen_manual_label.py --mapping-csv tiger_cluster_mapping.csv \
+    --contrast RWvsSC --out-name manual_v1
+# -> example_dataset/freesurfer-with_t2/sub-01/label/manual_v1/lh.IOG-words.label ...
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--mapping-csv` | — | the rater's sheet (`sub, ROI, cluster_id[, note][, hemi]`) |
+| `--contrast` | `RWvsAllNotext` | which contrast's clusters the ids refer to (case-insensitive) |
+| `--out-name` | `manual_v1` | sub-folder created under `<sub>/label/` |
+| `--hemi` | config `default_hemi` | hemisphere for rows without a `hemi` column |
+| `--sub` | all subjects in the sheet | only this subject |
+| `--out-dir` | FreeSurfer label dir | write to `<out-dir>/sub-XX/<out-name>/` instead |
+| `--clean` | off | delete existing `*.label` in the output folder first |
+
+Every row is checked before anything is written: a cluster id that does not
+exist for that contrast, a duplicated ROI name, or a subject with no clusters on
+disk stops the run and prints the ids that *are* available. A blank
+`cluster_id` skips the row; a cluster assigned to two ROIs only warns. Each
+label's header line records the subject, contrast, cluster ids and source sheet,
+and the script ends by printing the `manual_label_dir` value to paste into
+panel 4 or `config.yaml`.
 
 ### Rotating, and making a viewpoint stick
 

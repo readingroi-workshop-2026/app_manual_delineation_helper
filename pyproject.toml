@@ -15,6 +15,9 @@ dependencies = [
     # module" warning at startup.
     "watchdog>=4",
     "streamlit-js-eval>=1.0.0",
+    # CLI + console output for the scripts/ helpers (gen_manual_label, sync_autoroi_maps, ...).
+    "typer>=0.12",
+    "rich>=13",
 ]
 
 # This is an app, not a distributable package: tell uv to manage the
