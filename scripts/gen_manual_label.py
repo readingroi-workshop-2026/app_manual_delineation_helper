@@ -18,7 +18,9 @@ CSV format (header names are matched loosely, extra columns are ignored):
     1,PON-words,3,
 
 Optional ``hemi`` column (lh/rh) overrides ``--hemi`` per row.  A blank
-cluster_id skips the row; a cluster ID that does not exist on disk is an error.
+cluster_id writes no label (it is listed under ``skipped`` in the summary); a
+cluster ID that does not exist on disk is an error.  Each output folder also gets a
+``summary.yaml`` recording the contrast, source sheet and clusters per ROI.
 Everything is validated first and nothing is written if any row is wrong, so a
 typo in the sheet cannot produce a half-written label set.
 
@@ -103,7 +105,7 @@ class SubjectPlan:
     clusters_dir: Path
     out_dir: Path
     labels: List[PlannedLabel] = field(default_factory=list)
-    skipped: List[Tuple[MappingRow, str]] = field(default_factory=list)
+    skipped: List[MappingRow] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
 
@@ -115,6 +117,7 @@ class WrittenLabel:
     n_vertices: int
     cluster_ids: List[int]
     replaced: bool
+    note: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +307,7 @@ def plan_subject(
 
     Returns a plan whose ``errors`` list is non-empty if anything is missing;
     the caller decides whether to abort.  Rows with no cluster id are recorded
-    under ``skipped``.
+    under ``skipped`` and get no label.
     """
     clusters_dir = resolve_dir(config, str(config.get("clusters_dir", "")), sub)
     fs_sub = fs_subject_dir(config, sub)
@@ -334,7 +337,7 @@ def plan_subject(
         seen_roi[key] = row.line_no
 
         if not row.cluster_ids:
-            plan.skipped.append((row, "no cluster id"))
+            plan.skipped.append(row)
             continue
 
         contrasts = by_hemi.get(hemi_bids, {})
@@ -393,8 +396,48 @@ def write_subject(plan: SubjectPlan, config: dict, csv_name: str) -> List[Writte
         )
         replaced = pl.out_path.exists()
         write_label(pl.out_path, rows, comment)
-        written.append(WrittenLabel(row.roi, pl.out_path, len(rows), row.cluster_ids, replaced))
+        written.append(
+            WrittenLabel(row.roi, pl.out_path, len(rows), row.cluster_ids, replaced, row.note)
+        )
     return written
+
+
+def write_summary(plan: SubjectPlan, written: List[WrittenLabel], csv_path: Path) -> Path:
+    """Write ``summary.yaml`` next to the labels: contrast, source sheet, clusters per ROI."""
+    import yaml
+
+    summary = {
+        "subject": plan.sub,
+        "hemi": plan.hemi_fs,
+        "contrast": plan.contrast,
+        "source_csv": str(Path(csv_path).resolve()),
+        "clusters_dir": str(plan.clusters_dir),
+        "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "labels": {
+            w.roi: {
+                "file": w.path.name,
+                "cluster_ids": w.cluster_ids,
+                "n_vertices": w.n_vertices,
+                "note": w.note,
+            }
+            for w in written
+        },
+        "skipped": {r.roi: {"reason": "no cluster id", "note": r.note} for r in plan.skipped},
+    }
+    path = plan.out_dir / "summary.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(summary, f, sort_keys=False, allow_unicode=True)
+    return path
+
+
+def print_written(plan: SubjectPlan, written: List[WrittenLabel]) -> None:
+    for row in plan.skipped:
+        console.print(f"  [yellow]SKIP[/yellow] line {row.line_no} {row.roi}: no cluster id")
+    for w in written:
+        tag = "[green]replaced[/green]" if w.replaced else "[green]saved[/green]   "
+        ids = ",".join(map(str, w.cluster_ids))
+        console.print(f"  {tag} {w.path.name:<32} {w.n_vertices:>6} vertices  <- clusters {ids}")
 
 
 # ---------------------------------------------------------------------------
@@ -502,19 +545,14 @@ def main(
             for old in plan.out_dir.glob("*.label"):
                 old.unlink()
                 console.print(f"  [yellow]removed[/yellow] {old.name}")
-        for row, why in plan.skipped:
-            console.print(f"  [yellow]SKIP[/yellow] line {row.line_no} {row.roi}: {why}")
         try:
             written = write_subject(plan, config, mapping_csv.name)
+            summary = write_summary(plan, written, mapping_csv)
         except (OSError, ValueError) as e:
             console.print(f"  [red]ERROR[/red] {e}")
             raise typer.Exit(1)
-        for w in written:
-            tag = "replaced" if w.replaced else "saved"
-            console.print(
-                f"  [green]{tag}[/green] {w.path.name:<32} "
-                f"{w.n_vertices:>6} vertices  <- clusters {','.join(map(str, w.cluster_ids))}"
-            )
+        print_written(plan, written)
+        console.print(f"  [green]saved[/green] {summary.name}")
         console.print(f"  -> {plan.out_dir}")
 
     # --- how to load it in the app ---------------------------------------

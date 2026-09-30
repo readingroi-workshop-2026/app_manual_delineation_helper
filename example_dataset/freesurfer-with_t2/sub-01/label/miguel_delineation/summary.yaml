@@ -1,0 +1,45 @@
+subject: sub-01
+hemi: lh
+contrast: RWvsAllNotext
+source_csv: /Users/tiger/soft/app_manual_delineation_helper/inter-rater_variability_check/miguel_cluster_mapping.csv
+clusters_dir: /Users/tiger/soft/app_manual_delineation_helper/example_dataset/autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/sub-01/labels
+generated: '2026-09-30 14:06:07'
+labels:
+  IOG-words:
+    file: lh.IOG-words.label
+    cluster_ids:
+    - 1
+    n_vertices: 98
+    note: ''
+  PON-words:
+    file: lh.PON-words.label
+    cluster_ids:
+    - 2
+    n_vertices: 133
+    note: ''
+  pOTS-words:
+    file: lh.pOTS-words.label
+    cluster_ids:
+    - 13
+    - 15
+    - 16
+    - 18
+    - 19
+    n_vertices: 301
+    note: ''
+  mOTS-words:
+    file: lh.mOTS-words.label
+    cluster_ids:
+    - 23
+    - 25
+    - 27
+    n_vertices: 120
+    note: ''
+  mFus-words:
+    file: lh.mFus-words.label
+    cluster_ids:
+    - 30
+    - 35
+    n_vertices: 165
+    note: ''
+skipped: {}

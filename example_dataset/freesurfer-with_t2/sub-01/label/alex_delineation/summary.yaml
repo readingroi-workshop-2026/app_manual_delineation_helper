@@ -1,0 +1,39 @@
+subject: sub-01
+hemi: lh
+contrast: RWvsAllNotext
+source_csv: /Users/tiger/soft/app_manual_delineation_helper/inter-rater_variability_check/alex_WordClusters.csv
+clusters_dir: /Users/tiger/soft/app_manual_delineation_helper/example_dataset/autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/sub-01/labels
+generated: '2026-09-30 14:06:07'
+labels:
+  IOG-words:
+    file: lh.IOG-words.label
+    cluster_ids:
+    - 0
+    n_vertices: 90
+    note: ''
+  PON-words:
+    file: lh.PON-words.label
+    cluster_ids:
+    - 2
+    n_vertices: 133
+    note: ''
+  pOTS-words:
+    file: lh.pOTS-words.label
+    cluster_ids:
+    - 13
+    - 15
+    - 16
+    - 18
+    - 19
+    n_vertices: 301
+    note: maybe 13 is mFus?
+  mOTS-words:
+    file: lh.mOTS-words.label
+    cluster_ids:
+    - 25
+    n_vertices: 45
+    note: ''
+skipped:
+  mFus-words:
+    reason: no cluster id
+    note: not seen

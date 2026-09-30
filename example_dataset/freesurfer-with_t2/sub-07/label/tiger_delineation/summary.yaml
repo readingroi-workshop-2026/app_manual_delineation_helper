@@ -1,0 +1,43 @@
+subject: sub-07
+hemi: lh
+contrast: RWvsSC
+source_csv: /Users/tiger/soft/app_manual_delineation_helper/inter-rater_variability_check/tiger_delineation.csv
+clusters_dir: /Users/tiger/soft/app_manual_delineation_helper/example_dataset/autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/sub-07/labels
+generated: '2026-09-30 14:06:31'
+labels:
+  IOG-words:
+    file: lh.IOG-words.label
+    cluster_ids:
+    - 2
+    - 8
+    n_vertices: 280
+    note: ''
+  PON-words:
+    file: lh.PON-words.label
+    cluster_ids:
+    - 13
+    n_vertices: 128
+    note: ''
+  pOTS-words:
+    file: lh.pOTS-words.label
+    cluster_ids:
+    - 14
+    - 15
+    - 17
+    - 19
+    n_vertices: 225
+    note: ''
+  mOTS-words:
+    file: lh.mOTS-words.label
+    cluster_ids:
+    - 22
+    n_vertices: 47
+    note: ''
+  mFus-words:
+    file: lh.mFus-words.label
+    cluster_ids:
+    - 25
+    - 28
+    n_vertices: 137
+    note: ''
+skipped: {}

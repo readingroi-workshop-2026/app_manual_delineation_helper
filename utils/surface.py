@@ -12,12 +12,12 @@ from .config import fs_subject_dir, normalize_hemi, normalize_sub
 # the app and copy the values back into this dict.
 DEFAULT_VIEWS = {
     "lh": {
-        "azimuth": 40.0,
-        "elevation": -10.0,
-        "roll": 90.0,
+        "azimuth": 109.39,
+        "elevation": -50.42,
+        "roll": 168.90,
         "azim_offset": 110.0,
-        "camera_center_x": 0.38,
-        "zoom": 1.0,
+        "camera_center_x": 0.081,
+        "zoom": 1.22,
         "convention": "inv_zx",
     },
     "rh": {

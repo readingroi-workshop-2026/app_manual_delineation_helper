@@ -29,6 +29,7 @@ from utils.discovery import (
     clusters_by_contrast,
     heatmap_overlays_in,
     overlay_value_range,
+    roi_color,
     surface_labels_in,
 )
 from utils.plotting import build_surface_figure
@@ -48,7 +49,10 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-[data-testid="stSidebar"] {width: 300px !important; min-width: 300px !important;}
+/* Pin the width only while expanded: an unconditional min-width keeps the
+   collapsed sidebar's 300px reserved, so the main area never reclaims it. */
+[data-testid="stSidebar"][aria-expanded="true"] {width: 300px !important; min-width: 300px !important;}
+[data-testid="stSidebar"][aria-expanded="false"] {width: 0 !important; min-width: 0 !important;}
 [data-testid="stSidebar"] .block-container {padding-top:1rem;}
 .block-container {padding:0.6rem 1rem 0.5rem 1rem; max-width:100%;}
 [data-testid="stVerticalBlock"] {gap:0.35rem;}
@@ -111,8 +115,9 @@ def _per_label_style(names: list[str], panel: str,
     """One colour swatch + fill toggle per selected label.
 
     Returns ``{name: (color, fill)}``. Each label keeps its own choice in
-    session_state, so re-selecting a label brings its colour back; defaults
-    walk the palette so two labels never start out identical.
+    session_state, so re-selecting a label brings its colour back.  Word-ROI
+    names (IOG, PON, pOTS, mOTS, mFus) start from their fixed colour; other
+    labels walk the palette so two never start out identical.
     """
     styles: dict[str, tuple[str, bool]] = {}
     if not names:
@@ -121,7 +126,7 @@ def _per_label_style(names: list[str], panel: str,
     for i, name in enumerate(names):
         ckey, fkey = f"{panel}_col::{name}", f"{panel}_fill::{name}"
         st.session_state.setdefault(
-            ckey, CLUSTER_COLORS[(i + palette_offset) % len(CLUSTER_COLORS)])
+            ckey, roi_color(name) or CLUSTER_COLORS[(i + palette_offset) % len(CLUSTER_COLORS)])
         st.session_state.setdefault(fkey, False)
         c1, c2 = st.columns([1, 3], vertical_alignment="center")
         with c1:

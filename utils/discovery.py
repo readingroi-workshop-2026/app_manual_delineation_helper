@@ -42,6 +42,25 @@ CLUSTER_COLORS = [
     "#ff4500",  # orange-red
 ]
 
+# Fixed colour per word-ROI, so every rater's labels read the same way.
+# Matched case-insensitively as a substring of the label name.
+ROI_COLORS = {
+    "mfus": "#f58231",  # orange
+    "mots": "#3cb44b",  # green
+    "pots": "#e6194b",  # red
+    "pon": "#4363d8",   # blue
+    "iog": "#911eb4",   # purple
+}
+
+
+def roi_color(name: str) -> str | None:
+    """Fixed colour for a word-ROI label name (e.g. 'mFus-words'), else None."""
+    low = name.lower()
+    for key, color in ROI_COLORS.items():
+        if key in low:
+            return color
+    return None
+
 
 @st.cache_data(ttl=TTL, show_spinner=False)
 def heatmap_overlays_in(dir_path: str, hemi_bids: str) -> dict[str, str]:

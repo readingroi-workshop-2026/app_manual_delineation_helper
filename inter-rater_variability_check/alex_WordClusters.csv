@@ -1,0 +1,16 @@
+sub,manual_ROI(from posterior to anterior),cluster_id,notes
+1,IOG-words,0,
+1,PON-words,2,
+1,pOTS-words,"13,15,16,18,19",maybe 13 is mFus?
+1,mOTS-words,25,
+1,mFus-words,,not seen 
+2,IOG-words,2,
+2,PON-words,"8,10",
+2,pOTS-words,"13,14,19",
+2,mOTS-words,21,
+2,mFus-words,,not seen 
+3,IOG-words,"5,8,2",
+3,PON-words,"11,15",
+3,pOTS-words,"18,19,24","not sure about whether all 3 clusters are pOTS or maybe just the more anterior one, 24"
+3,mOTS-words,28,
+3,mFus-words,,two small mfs clusters: 23 and 44

@@ -142,10 +142,22 @@ uv run scripts/gen_manual_label.py --mapping-csv tiger_cluster_mapping.csv \
 Every row is checked before anything is written: a cluster id that does not
 exist for that contrast, a duplicated ROI name, or a subject with no clusters on
 disk stops the run and prints the ids that *are* available. A blank
-`cluster_id` skips the row; a cluster assigned to two ROIs only warns. Each
-label's header line records the subject, contrast, cluster ids and source sheet,
-and the script ends by printing the `manual_label_dir` value to paste into
-panel 4 or `config.yaml`.
+`cluster_id` writes no label (the ROI is listed under `skipped` in the
+summary); a cluster assigned to two ROIs only warns. Each label's header line
+records the subject, contrast, cluster ids and source sheet, a `summary.yaml`
+next to the labels records the same per ROI, and the script ends by printing the
+`manual_label_dir` value to paste into panel 4 or `config.yaml`.
+
+**All raters at once.** Put one `<rater>_*.csv` per rater in
+`inter-rater_variability_check/` and run:
+
+```bash
+uv run scripts/gen_manual_label_batch.py            # --contrast RWvsAllNotext by default
+# -> example_dataset/freesurfer-with_t2/sub-01/label/alex_delineation/lh.*.label + summary.yaml
+```
+
+The rater name is the file name up to the first `_`. A sheet with any bad row
+writes nothing and is reported; the other sheets still run.
 
 ### Rotating, and making a viewpoint stick
 
@@ -238,7 +250,7 @@ All commands below assume you start from the root of the cloned repo:
 
 ```bash
 git clone <repo-url>
-cd app_manual_delination_helper
+cd app_manual_delineation_helper
 ```
 
 ---
@@ -396,7 +408,7 @@ the safe default on a shared machine.
 ```bash
 # 1) on the remote host
 ssh <user>@cajal03
-cd <path-to-clone>/app_manual_delination_helper
+cd <path-to-clone>/app_manual_delineation_helper
 conda activate votcloc          # or: uv sync (first time)
 ./launch.sh 8501                # or: uv run ./launch.sh 8501
 
