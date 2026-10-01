@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delineation Helper</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.8/build/index.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<header>
+  <strong>Delineation Helper</strong>
+  <label>Subject
+    <button id="prev" title="previous subject (,)">◀</button><select id="sub"></select><button id="next" title="next subject (.)">▶</button></label>
+  <label>Hemi <select id="hemi"><option>lh</option><option>rh</option></select></label>
+  <button id="load" title="re-read this subject's files from disk">Reload</button>
+  <span id="status" class="dim"></span>
+  <button id="png" title="save the visible panels as a PNG">Save PNG</button>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>1 · Heatmap</h2>
+      <input class="dir" data-kind="heatmap" title="*.func.gii folder; {sub} = subject; Enter to apply">
+      <select id="heat"></select>
+      <label class="row">Threshold
+        <input type="range" id="thr" min="0" max="1" step="0.001" value="0.1">
+        <input type="number" id="thr-n" step="any" class="num"></label>
+      <label class="row">Opacity
+        <input type="range" id="heat-alpha" min="0" max="1" step="0.05" value="0.85"></label>
+      <div id="colorbar"><div class="bar"></div><div class="ticks"><span id="cb-lo"></span><span id="cb-hi"></span></div></div>
+    </section>
+
+    <section>
+      <h2>2 · Auto clusters</h2>
+      <input class="dir" data-kind="clusters" title="*_Cluster_*.label folder; {sub} = subject; Enter to apply">
+      <p class="hint">Cluster IDs run <b>posterior → anterior</b>: the higher the index, the more anterior.</p>
+      <ul id="clusters" class="list scroll"></ul>
+      <div class="row">
+        <label><input type="checkbox" id="cluster-fill"> fill</label>
+        <span class="spacer"></span>
+        <button data-clear="clusters">Clear all</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>3 · Atlas labels</h2>
+      <input class="dir" data-kind="atlas" title="<hemi>.*.label / .annot folder; {sub} = subject; Enter to apply">
+      <input class="filter" data-kind="atlas" placeholder="filter…">
+      <ul id="atlas" class="list scroll"></ul>
+      <div class="row"><span class="spacer"></span><button data-clear="atlas">Clear all</button></div>
+    </section>
+
+    <section>
+      <h2>4 · Manual labels</h2>
+      <select id="manual-folder" title="rater folders next to the atlas labels"></select>
+      <input class="dir" data-kind="manual" title="<hemi>.*.label folder; {sub} = subject; Enter to apply">
+      <ul id="manual" class="list scroll"></ul>
+      <div class="row"><span class="spacer"></span><button data-clear="manual">Clear all</button></div>
+    </section>
+
+    <section>
+      <h2>Labels</h2>
+      <label class="row">fill opacity
+        <input type="range" id="fill-alpha" min="0.05" max="1" step="0.05" value="0.6"></label>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <div id="surf-toggles"></div>
+      <label class="row"><input type="checkbox" id="link" checked> link cameras (rotate, zoom, pan)</label>
+      <label class="row"><input type="checkbox" id="curv-on" checked> curvature shading</label>
+      <div class="row wrap" id="views">
+        <button data-view="lateral">Lateral</button>
+        <button data-view="medial">Medial</button>
+        <button data-view="ventral">Ventral</button>
+        <button data-view="dorsal">Dorsal</button>
+        <button data-view="anterior">Anterior</button>
+        <button data-view="posterior">Posterior</button>
+      </div>
+      <p class="hint">Drag rotate · right-drag pan · wheel zoom</p>
+    </section>
+  </aside>
+
+  <div id="stage">
+    <div id="viewers"></div>
+    <div id="legend" hidden>
+      <div class="legend-head">
+        <span>Shown</span>
+        <button id="legend-all" title="show every entry again">show all</button>
+        <button id="legend-min" title="collapse">–</button>
+      </div>
+      <p class="hint">click hide/show · double-click only this · hover highlight</p>
+      <ul id="legend-list"></ul>
+    </div>
+  </div>
+</main>
+
+<footer id="hover" class="dim">Load a subject to start.</footer>
+
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

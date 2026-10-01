@@ -1,0 +1,60 @@
+{
+ "sub": "sub-01",
+ "hemi": "lh",
+ "name": "interior-occipito-gyrus",
+ "rater": "tiger",
+ "n_vertices": 1225,
+ "saved": "2026-10-01T01:54:37",
+ "color": [
+  240,
+  50,
+  230
+ ],
+ "contours": [
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    16140,
+    11414,
+    10543,
+    12460,
+    14433,
+    13466,
+    10607,
+    14334,
+    16272,
+    19153,
+    20118,
+    21016,
+    20121,
+    16218
+   ],
+   "seed": -1
+  },
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    11600,
+    9818,
+    10655,
+    9809,
+    11561,
+    108789,
+    13422
+   ],
+   "seed": -1
+  },
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    13422,
+    14379,
+    14406
+   ],
+   "seed": -1
+  }
+ ]
+}

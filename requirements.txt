@@ -1,9 +1,9 @@
-streamlit>=1.36
-plotly>=5.20
+# Derived from pyproject.toml, which is the source of truth. For people /
+# clusters without uv; the maintainer uses `uv sync`.
+fastapi>=0.110
+uvicorn>=0.29
 numpy
 nibabel
 pyyaml
-watchdog>=4
-streamlit-js-eval>=1.0
 typer>=0.12
 rich>=13

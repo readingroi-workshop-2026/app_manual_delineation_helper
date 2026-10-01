@@ -5,7 +5,38 @@ This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PA
 
 ## [Unreleased]
 
+### Changed
+- **New viewer GUI.** Streamlit + Plotly are replaced by a browser page served
+  by `app.py` (FastAPI + typer CLI; `uv run app.py`, `./launch.sh`). Surfaces
+  are rendered by the three.js engine of surface-annotate, vendored under
+  `static/vendor/surface_annotate/`.
+  - Inflated and pial side by side with linked cameras (rotate, zoom, pan);
+    free trackball rotation; per-surface opacity and triangle-mesh overlay;
+    view presets; PNG export of the visible panels.
+  - Every layer toggle, colour, fill, threshold and opacity applies instantly —
+    no Plot button, and the view is never reset by a change.
+  - Atlas panel also shows `<hemi>.*.annot` files, with per-region selection.
+  - Manual panel offers the rater folders next to the atlas labels.
+  - A legend over the surfaces lists every ticked cluster (grouped per
+    contrast) and label: click hides/shows, double-click isolates, hover fills.
+  - Picking a subject/hemisphere loads it at once; ◀ ▶ (or `,` `.`) step
+    through subjects. The camera (mirrored across hemispheres), surface
+    opacity/mesh, heatmap + threshold, label fill/regions/legend state and
+    fully ticked contrasts all carry over.
+  - Hover readout: vertex, coordinates, curvature, heatmap value, labels.
+- `manual_label_dir` defaults to `.../label/tiger_delineation`; new `surfaces`
+  config key; `default_surface` is gone (both surfaces are shown).
+- Requires Python ≥ 3.10.
+
+### Removed
+- Camera sliders, live viewpoint readout and `DEFAULT_VIEWS` presets
+  (`utils/camera.py`, `utils/plotting.py`, `.streamlit/`), which only existed
+  to work around Plotly resetting the view.
+- Dependencies `streamlit`, `plotly`, `watchdog`, `streamlit-js-eval`.
+
 ### Added
+- `tests/test_app.py`: API tests on a synthetic subject, plus a check that the
+  vendored engine matches surface-annotate. Run in the release workflow.
 - `scripts/gen_manual_label.py`: build FreeSurfer manual labels from a rater's
   `cluster_mapping.csv` by merging the listed auto-cluster labels of one
   contrast (`--contrast`, default `RWvsAllNotext`) into one label per ROI,

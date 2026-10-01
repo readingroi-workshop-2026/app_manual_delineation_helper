@@ -1,0 +1,36 @@
+{
+ "sub": "sub-01",
+ "hemi": "lh",
+ "name": "lateral-occipito-complex",
+ "rater": "tiger",
+ "n_vertices": 894,
+ "saved": "2026-10-01T01:54:37",
+ "color": [
+  210,
+  245,
+  60
+ ],
+ "contours": [
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    13423,
+    8821,
+    8713,
+    13206,
+    108253,
+    16031,
+    107988,
+    19932,
+    18134,
+    16157,
+    15182,
+    12347,
+    11428,
+    115472
+   ],
+   "seed": -1
+  }
+ ]
+}

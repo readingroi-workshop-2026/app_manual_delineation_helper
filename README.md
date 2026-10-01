@@ -1,4 +1,4 @@
-# Manual delineation helper (Streamlit surface viewer)
+# Manual delineation helper (surface viewer)
 
 [![DOI](https://zenodo.org/badge/1315063607.svg)](https://doi.org/10.5281/zenodo.22044800)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -11,11 +11,13 @@ specific to that: point it at any FreeSurfer surface with overlays and labels
 and it works. Think of it as a lighter FreeView for a quick look, with every
 label toggleable on and off.
 
-The front end is **Streamlit**, the surface itself is rendered by **Plotly**
-(WebGL) from geometry and labels read with **nibabel**, and every input path
-comes from `config.yaml` — so pointing it at a different study, subject tree or
+It runs in the browser: the **inflated and pial surfaces side by side**, with
+linked cameras, rendered by the three.js engine of
+[surface-annotate](https://github.com/yongninglei/app_surface_annotate). A small
+Python server (FastAPI + **nibabel**) reads the files, and every input path
+comes from `config.yaml`, so pointing it at a different study, subject tree or
 label set is a config edit, not a code change. Paths are also editable live in
-the app.
+the page.
 
 | Type | Used as |
 |------|---------|
@@ -23,6 +25,7 @@ the app.
 | `.curv`              | the two-tone curvature shading underneath |
 | `.func.gii`          | the contrast heatmap overlay |
 | `.label`             | auto clusters, atlas labels, your own manual labels |
+| `.annot`             | atlas parcellations (e.g. `aparc.a2009s`), per region |
 
 **No threshold picking.** Deciding where to cut a continuous map is arbitrary,
 and that arbitrariness is a large source of intra-rater variability: the same
@@ -81,40 +84,71 @@ Running on a remote host instead? See [Remote host (ssh tunnel)](#remote-host-ss
 
 ## Using the app
 
-One sidebar and four panels.
+The header picks the **subject** and **hemisphere**; picking one loads it
+straight away (**◀ ▶** or the `,` `.` keys step through subjects; **Reload**
+re-reads the files). The sidebar
+has the four layer panels and the view controls. The main area shows the
+**inflated** surface on the left and the **pial** on the right.
 
-**Sidebar** — subject, hemisphere, surface (inflated / pial), rotation mode, and
-the **Camera** sliders: azimuth, elevation, roll, azimuth offset, camera centre
-and zoom. Each hemisphere keeps its own values, seeded from the preset in
-`utils/surface.py`.
+**Everything applies instantly.** Ticking a label, changing a colour, fill,
+threshold or opacity redraws straight away. There is no Plot button, and your
+view is never reset.
 
 | Panel | Controls | Typical content |
 |-------|----------|-----------------|
-| **1 · Heatmap** | the overlay heatmap: which contrast, threshold, opacity | `*.func.gii` score / mean maps |
-| **2 · Auto clusters** | contours of the auto clusters, per contrast or one by one | `*_Cluster_*.label` |
-| **3 · Atlas labels** | extra reference labels | aparc **OTS**, Wang atlas **hV4** and **hMT**, **FG1–4** |
-| **4 · Manual labels** | extra reference labels you made yourself | e.g. `manual-v1/lh.my-ROI.label` |
+| **1 · Heatmap** | which map, threshold (slider + exact box, bounded by the map's own range), opacity, colour bar | `*.func.gii` score / mean maps |
+| **2 · Auto clusters** | tick a whole **contrast**, or **▸** to tick single clusters; one **fill** switch | `*_Cluster_*.label` |
+| **3 · Atlas labels** | each label: tick, colour, fill. Each annot: tick, fill, **▸** to pick regions | aparc **OTS**, Wang **hV4**/**hMT**, **FG1–4**, `aparc.a2009s` |
+| **4 · Manual labels** | pick a **rater folder** (`tiger_delineation/`, `anat_label_tiger/`, …) or type a path; then as panel 3 | labels you or a colleague drew |
 
-Panels 3 and 4 are both "load extra labels for reference" — 3 points at the
-atlas/recon labels, 4 at your own. In **both**, every selected label gets its
-own colour swatch and its own **fill** tick (unticked = outline only), so you
-can, say, show FG1–4 as four differently coloured outlines and fill just the
-one you are arguing about. Choices stick per label name, so deselecting and
-re-selecting a label brings its colour back.
+Colours stick per label name, so unticking and re-ticking a label brings its
+colour back. Word-ROI names (IOG, PON, pOTS, mOTS, mFus) always start from the
+same colour for every rater. **fill opacity** under *Labels* sets how strong
+every filled label is.
 
 **Panel 4 is yours to fill.** It is meant for labels *you* generate — a first
 manual delineation, a second pass, a colleague's version to compare against.
-Save them in the subject's FreeSurfer label directory, either straight in it or
-one folder deeper if you want to keep versions apart:
+Keep each set in its own folder in the subject's FreeSurfer label directory:
 
 ```
-freesurfer-with_t2/<sub>/label/lh.my-ROI.label          # flat
-freesurfer-with_t2/<sub>/label/manual-v1/lh.my-ROI.label   # one layer deeper
+freesurfer-with_t2/<sub>/label/tiger_delineation/lh.mFus-words.label
+freesurfer-with_t2/<sub>/label/anat_label_tiger/lh.fusiform-gyrus.label
 ```
 
-Point `manual_label_dir` at whichever level holds the files (the panel's text
-box takes a new path live, no restart), and the panel lists every
-`<hemi>.*.label` it finds there. Only the selected hemisphere's files show up.
+Every folder there is offered in the panel's folder list. To use a folder
+elsewhere, type its path in the box (`{sub}` = subject, Enter to apply). Only
+the selected hemisphere's files show up.
+
+### The legend: toggling single clusters
+
+Everything you tick in panels 2–4 is listed in a **legend floating over the
+surfaces**, one group per contrast (entries `#0`, `#3`, … in posterior →
+anterior order), then atlas and manual labels. It is the quick way to go
+through the clusters of a contrast and map them to ROIs:
+
+- **click** an entry: hide / show it on the surface (it stays ticked);
+- **double-click**: show only that one in its group; double-click it again to
+  bring the others back;
+- **hover**: fill it, so you can see where it is on inflated and pial;
+- **show all** brings every hidden entry back; **–** collapses the legend.
+
+Ticking a contrast also opens its cluster list in panel 2, where each cluster
+has its own tick and colour swatch.
+
+### Switching subject keeps your setup
+
+Moving to another subject (or hemisphere) changes only the subject's own
+data — surfaces, heatmap values, clusters, labels. Everything else stays:
+
+- the **camera** (angle, zoom, pan; mirrored across the midline when you
+  switch hemisphere, so lateral stays lateral);
+- per-surface **opacity**, **mesh** and hidden panels;
+- the **heatmap** and its **threshold**, heatmap opacity, fill opacity;
+- ticked **atlas / manual labels** with their colour, fill, annot regions and
+  legend hide/show state;
+- every **contrast you had fully ticked** in panel 2 — ticked again with the
+  new subject's own clusters. Single clusters are not carried over, because
+  cluster IDs are numbered per subject.
 
 ### Generating manual labels from the sheet
 
@@ -159,70 +193,52 @@ uv run scripts/gen_manual_label_batch.py            # --contrast RWvsAllNotext b
 The rater name is the file name up to the first `_`. A sheet with any bad row
 writes nothing and is reported; the other sheets still run.
 
-### Rotating, and making a viewpoint stick
+### Rotating and viewing
 
-You can drag the brain in the plot to any angle, scroll to zoom, and pan — the
-usual Plotly 3D controls. But **the sidebar sliders are the only thing the app
-actually remembers.** A dragged view lives in the browser only; Python is never
-told about it.
+- **Drag** rotates (free trackball), **right-drag** pans, the **wheel** zooms.
+  The two panels are **linked**: moving either one moves both. Untick
+  **link cameras** to move them separately.
+- **Lateral / Medial / Ventral / …** reset both panels to that view. The page
+  opens on **Ventral**.
+- Under **View**, each surface has its own row: show/hide the panel, an
+  **opacity** slider, and a **mesh** toggle that overlays the triangle mesh
+  (zoom in to see single edges). Below full opacity the front surface turns
+  see-through like glass.
+- The footer shows the vertex under the mouse: its coordinates, curvature,
+  heatmap value, and every visible label or annot region it falls in.
+- **Save PNG** (top right) saves the visible panels as one image, named after
+  the subject, hemisphere, heatmap and threshold.
 
-⚠️ **So a hand-dragged angle is temporary.** It survives small things like
-toggling labels in the legend, but the moment the surface is rebuilt — you press
-**🔄 Plot** after loading new clusters, or switch subject / hemisphere /
-surface — the figure is redrawn *from the sliders* and your dragged angle is
-gone. Losing a view you spent a minute finding, right after loading the next
-label, is the usual way to hit this.
-
-For that reason the **📐 Viewpoint** panel under the plot gives a **live
-readout**: while you drag, it shows the viewpoint you are currently looking at,
-in the same six parameters the sidebar uses — azimuth, elevation, roll, azimuth
-offset, centre x and zoom.
-
-It is behind a **Live readout** switch, off by default. While it is on, it
-listens to every drag event and recomputes on each frame, so the intended cycle
-is: **switch it on → drag until the view is right → copy the numbers into the
-sidebar → switch it off.** With the switch off nothing watches the plot at all.
-
-**Remember to move those values into the sidebar** once you have found an angle
-worth keeping. Either press **⬅ Copy readout into the sidebar sliders**, or type
-them into the boxes underneath (the plot redraws on Enter). Until you do, the
-sidebar still holds the old view and the next rebuild will snap back to it. The
-copy button works whether the readout is on or off.
-
-To keep a viewpoint **permanently** — across restarts, for everybody — paste the
-`DEFAULT_VIEWS` snippet the panel prints into `utils/surface.py`. That is how the
-`lh` and `rh` presets were made. Nothing about a session's viewpoint is written
-to disk otherwise.
+Nothing about the view is stored on the server, and nothing needs to be. A
+view only resets when you press a view button or load another subject.
 
 **The mapping loop:**
 
-1. Pick the subject and hemisphere in the sidebar.
-2. Panel 1 — load the heatmap for the contrast you're working on, and set the
-   threshold (the slider is bounded by that map's own value range, shown as a
-   caption; type an exact value in the box next to it).
-3. Panel 2 — load the matching clusters. Selecting a **contrast** loads all of
-   its clusters at once; you can also pick them individually. Cluster IDs run
-   posterior → anterior, so a higher index is a more anterior cluster.
-4. Panel 3 / 4 — switch on whichever reference labels help you decide.
-5. Press **🔄 Plot** (or **🔄 Update plot** in the sidebar) to rebuild the
-   surface. The 3D mesh is only rebuilt on demand, so tweaking controls stays
-   instant.
-6. Rotate to a good viewpoint, toggle individual labels on and off in the plot
-   legend, and fill the cluster IDs into your CSV. If you want to keep that
-   angle for the next cluster, copy it into the sidebar first (see above) —
-   otherwise the next **🔄 Plot** resets it.
+1. Pick the subject and hemisphere, press **Load**.
+2. Panel 1: pick the heatmap for the contrast you're working on and set the
+   threshold. The slider is bounded by that map's own value range; type an
+   exact value in the box next to it.
+3. Panel 2: tick the matching contrast to show all its clusters, or open it
+   (**▸**) and tick single ones. Cluster IDs run posterior → anterior, so a
+   higher index is a more anterior cluster. Hover a cluster to read its name.
+4. Panels 3 / 4: switch on whichever reference labels help you decide.
+5. Use the **legend** to go through the clusters one by one (hover to find,
+   click to hide, double-click to isolate), compare on inflated and pial, and
+   fill the cluster IDs into your CSV.
+6. Press **▶** for the next subject: same view, same heatmap, same contrast,
+   that subject's clusters.
 
 Each layer's directory comes from a `config.yaml` field but is **editable live**
-in the panel's text box, so you can point one panel elsewhere without
-restarting. In every path `{sub}` is replaced by the selected subject; relative
-paths resolve under the data root, absolute paths are used as-is.
+in the panel's text box (Enter to apply). In every path `{sub}` is replaced by
+the selected subject; relative paths resolve under the data root, absolute
+paths are used as-is.
 
 | # | Layer         | config field       | scans for            |
 |---|---------------|--------------------|----------------------|
 | 1 | Heatmap       | `heatmap_dir`      | `*.func.gii`         |
 | 2 | Auto clusters | `clusters_dir`     | `*_Cluster_*.label`  |
-| 3 | Atlas labels  | `atlas_label_dir`  | `<hemi>.*.label` (FreeSurfer/atlas) |
-| 4 | Manual labels | `manual_label_dir` | `<hemi>.*.label` (e.g. `manual-v1`) |
+| 3 | Atlas labels  | `atlas_label_dir`  | `<hemi>.*.label`, `<hemi>.*.annot` |
+| 4 | Manual labels | `manual_label_dir` | `<hemi>.*.label` (e.g. `tiger_delineation/`) |
 
 ---
 
@@ -233,9 +249,11 @@ at your data, and running it on a remote machine.
 
 ## Requirements
 
-- Python **≥ 3.9**
+- Python **≥ 3.10**
 - Read access to the derivatives tree pointed to by `config.yaml` (`data_dir`).
-- Dependencies: `streamlit`, `plotly`, `numpy`, `nibabel`, `pyyaml`, `watchdog`.
+- Dependencies: `fastapi`, `uvicorn`, `numpy`, `nibabel`, `pyyaml`, `typer`, `rich`.
+- A browser with WebGL and internet access: the page loads three.js from
+  jsDelivr. The machine running `app.py` needs no internet.
 
 The same dependency set is declared three times, one per install style — pick
 whichever matches your tooling, they are interchangeable:
@@ -258,7 +276,7 @@ cd app_manual_delineation_helper
 ## Install
 
 Four equivalent routes — use the one your setup already has. Each ends with an
-environment that can run `streamlit run app.py`.
+environment that can run `python app.py`.
 
 ### Option A — uv (recommended)
 
@@ -315,7 +333,7 @@ BCBL machines) rather than creating a new one:
 
 ```bash
 conda activate votcloc
-conda install -c conda-forge streamlit plotly numpy nibabel pyyaml watchdog
+conda install -c conda-forge fastapi uvicorn numpy nibabel pyyaml typer rich
 ```
 
 ### Option C — venv + pip
@@ -336,7 +354,7 @@ reads directly. This app isn't a package, so install the dependencies only:
 
 ```bash
 poetry install --no-root
-poetry run streamlit run app.py
+poetry run python app.py
 ```
 
 On Poetry 1.x, which doesn't read `[project]`, use the requirements file
@@ -388,13 +406,15 @@ bash ./launch.sh
 
 ### The other command
 
-`launch.sh` just wraps Streamlit with headless, `localhost`-only settings — the
-right mode behind an ssh tunnel. To open a browser tab directly instead, swap
-in `streamlit run app.py` (same prefix rules):
+`launch.sh` just runs `app.py` without opening a browser, bound to
+`localhost` — the right mode behind an ssh tunnel. On your own machine, run
+`app.py` directly and it opens a browser tab for you (same prefix rules):
 
 ```bash
-uv run streamlit run app.py --server.port 8600      # uv
-streamlit run app.py --server.port 8600             # activated env
+uv run app.py                      # uv; opens http://localhost:8501
+uv run app.py --port 8600          # another port
+python app.py                      # activated env
+python app.py --help               # all options (--config, --host, --no-open)
 ```
 
 ---
@@ -452,34 +472,37 @@ disk_data_dir: /bcbl/home/public/Gari/VOTCLOC/main_exp/derivatives
 fs_dir: freesurfer-with_t2          # surface geometry: <data_root>/<fs_dir>/<sub>/surf/
 default_subject: "02"
 default_hemi: lh
-default_surface: inflated
-default_contrast: RWvsSC
+default_contrast: RWvsSC            # its *_score map is shown on load
+surfaces: [inflated, pial]          # panels, left to right
 heatmap_dir:      autoROI/individual/analysis-27.../{sub}
 clusters_dir:     autoROI/individual/analysis-27.../{sub}/labels
 atlas_label_dir:  freesurfer-with_t2/{sub}/label
-manual_label_dir: freesurfer-with_t2/{sub}/label/manual-v1
+manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 ```
 
-To point the app at a different tree, edit `data_dir` (or type a new path in
-the sidebar's **Config YAML** box at runtime).
+To point the app at a different tree, edit `data_source` / `disk_data_dir`, or
+start it with another config: `uv run app.py --config my_config.yaml`.
 
 ---
 
 ## Files
 
 ```
-app.py                 Streamlit UI only
+app.py                 server (FastAPI) + CLI: serves the page and the files it asks for
+static/index.html      the page: layer panels + view controls
+static/app.js          layer logic (heatmap, clusters, atlas, manual) on top of the engine
+static/style.css       page style
+static/vendor/surface_annotate/  vendored viewer engine (viewer.js, mesh.js); see its README
 utils/config.py        config loading + sub/hemi naming + resolve_dir (path templates)
-utils/surface.py       surface geometry (inflated & pial), per-hemi camera, vertex normals
+utils/surface.py       read surface geometry (inflated & pial) and curvature
 utils/labels.py        readers for .label and .func.gii files
 utils/discovery.py     scan one layer directory -> {display_name: path} (+ palette)
-utils/plotting.py      build the Plotly figure (curvature + overlay + label traces)
+tests/test_app.py      API tests on a synthetic subject (uv run pytest)
 config.yaml            data_dir + fs_dir + one directory per layer (all editable in-app)
 example_cluster_mapping.csv  template for recording cluster -> ROI assignments
 pyproject.toml         project metadata + dependencies (uv / poetry / pip)
 requirements.txt       same dependency list, for the plain pip path
 environment.yml        same dependency list, for conda / micromamba
-.streamlit/config.toml dark theme
 launch.sh              headless launcher for remote use
 ```
 

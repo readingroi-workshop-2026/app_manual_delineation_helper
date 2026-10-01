@@ -1,0 +1,64 @@
+{
+ "sub": "sub-01",
+ "hemi": "lh",
+ "name": "mid-fusiform-sulcus",
+ "rater": "tiger",
+ "n_vertices": 333,
+ "saved": "2026-10-01T01:54:37",
+ "color": [
+  0,
+  130,
+  200
+ ],
+ "contours": [
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    58416,
+    56627,
+    54732,
+    53715,
+    108690,
+    124027,
+    51803,
+    52736,
+    54695,
+    57515
+   ],
+   "seed": -1
+  },
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    126260,
+    43380,
+    41445,
+    42430,
+    47241,
+    48263
+   ],
+   "seed": -1
+  },
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    38566,
+    35690,
+    34638,
+    30652,
+    28667,
+    108859,
+    28732,
+    29733,
+    117308,
+    35718,
+    39466,
+    40467
+   ],
+   "seed": -1
+  }
+ ]
+}

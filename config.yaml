@@ -21,11 +21,15 @@ fs_dir: freesurfer-with_t2
 # replaced with the selected subject; every path is also editable live in the
 # app (the box is pre-filled from here).
 
-# Initial dropdown selections
+# Initial selections: subject, hemisphere, and the contrast whose *_score
+# heatmap is shown on load.
 default_subject: "02"
 default_hemi: lh
-default_surface: inflated
 default_contrast: RWvsSC
+
+# Surfaces shown side by side, left to right (linked cameras). They must share
+# vertex indices, which all surfaces of one FreeSurfer hemisphere do.
+surfaces: [inflated, pial]
 
 # Layer 1 — heatmap overlays (*.func.gii)
 heatmap_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}
@@ -33,9 +37,10 @@ heatmap_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/
 # Layer 2 — auto clusters (*_Cluster_*.label)
 clusters_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}/labels
 
-# Layer 3 — FreeSurfer / atlas labels shipped with the recon (lh.*.label)
+# Layer 3 — FreeSurfer / atlas labels and annots shipped with the recon
+# (lh.*.label, lh.*.annot). Its sub-folders are offered as layer-4 sources.
 atlas_label_dir: freesurfer-with_t2/{sub}/label
 
 # Layer 4 — user-defined manual labels (lh.*.label)
-manual_label_dir: freesurfer-with_t2/{sub}/label/user_path
+manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 

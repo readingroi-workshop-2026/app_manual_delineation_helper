@@ -1,0 +1,50 @@
+{
+ "sub": "sub-01",
+ "hemi": "lh",
+ "name": "pre-occipito-notch",
+ "rater": "tiger",
+ "n_vertices": 702,
+ "saved": "2026-10-01T11:21:58",
+ "color": [
+  70,
+  240,
+  240
+ ],
+ "contours": [
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    23661,
+    21873,
+    24675,
+    24645,
+    24714,
+    19148,
+    20152,
+    19212,
+    19130,
+    16215,
+    110783,
+    109763,
+    16193,
+    122174,
+    22663
+   ],
+   "seed": -1
+  },
+  {
+   "mode": "add",
+   "path_surface": "inflated",
+   "points": [
+    21971,
+    20165,
+    20090,
+    21949,
+    22931,
+    21974
+   ],
+   "seed": -1
+  }
+ ]
+}

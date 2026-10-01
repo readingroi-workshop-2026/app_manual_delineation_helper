@@ -2,12 +2,8 @@
 
 Each layer in the app points at one directory (resolved from its config
 field or the live text box). These helpers scan that directory and return an
-ordered ``{display_name: full_path}`` mapping. They hit an NFS mount, so
-they're wrapped in st.cache_data with a short TTL — repeated Streamlit reruns
-(e.g. dragging a slider) reuse the listing, but newly written files still show
-up within TTL seconds without restarting the app.
-
-The directory path is passed in as a string so the cache key is stable.
+ordered ``{display_name: full_path}`` mapping. They are called on every
+subject load, so newly written files show up without restarting the app.
 """
 
 from __future__ import annotations
@@ -16,9 +12,6 @@ import re
 from pathlib import Path
 
 import numpy as np
-import streamlit as st
-
-TTL = 30  # seconds
 
 # Solid, saturated palette so labels stay legible on the gray surface.
 CLUSTER_COLORS = [
@@ -62,7 +55,6 @@ def roi_color(name: str) -> str | None:
     return None
 
 
-@st.cache_data(ttl=TTL, show_spinner=False)
 def heatmap_overlays_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     """`*.func.gii` overlays in a directory, for the given hemisphere.
 
@@ -85,7 +77,6 @@ def heatmap_overlays_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     return out
 
 
-@st.cache_data(ttl=TTL, show_spinner=False)
 def cluster_labels_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     """`*_Cluster_*.label` files in a directory, for the given hemisphere.
 
@@ -113,7 +104,6 @@ def cluster_labels_in(dir_path: str, hemi_bids: str) -> dict[str, str]:
     return out
 
 
-@st.cache_data(ttl=TTL, show_spinner=False)
 def overlay_value_range(path: str) -> tuple[float, float]:
     """(min, max) of the finite values in a `.func.gii` overlay.
 
@@ -149,7 +139,6 @@ def clusters_by_contrast(cluster_map: dict[str, str]) -> dict[str, list[str]]:
     return out
 
 
-@st.cache_data(ttl=TTL, show_spinner=False)
 def surface_labels_in(dir_path: str, hemi_fs: str) -> dict[str, str]:
     """`<hemi>.<name>.label` files in a directory → ``{name: path}``.
 

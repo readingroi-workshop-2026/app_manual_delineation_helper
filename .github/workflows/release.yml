@@ -12,7 +12,8 @@ name: release
 # Note this project is an application, not a distributable package
 # (`[tool.uv] package = false`, no [build-system], no [project.scripts]), so
 # there is no wheel to build or entry point to smoke-test. The checks below
-# verify the environment resolves and the sources import instead.
+# verify the environment resolves, the sources import, the tests pass and the
+# viewer's CLI starts.
 
 on:
   push:
@@ -94,13 +95,14 @@ jobs:
         run: |
           "$HOME/.local/bin/uv" sync --frozen
 
-      # No console scripts to exercise. Importing app.py would execute Streamlit
-      # page code, so compile every source instead — this catches a syntax error
-      # or a bad import path before it reaches a permanent DOI.
-      - name: Compile all sources
+      # Catches a syntax error, a bad import path or a broken API before it
+      # reaches a permanent DOI.
+      - name: Compile, test, and start the CLI
         run: |
           "$HOME/.local/bin/uv" run python -m compileall -q app.py utils scripts
-          "$HOME/.local/bin/uv" run python -c "import utils.config, utils.discovery, utils.labels"
+          "$HOME/.local/bin/uv" sync --frozen --group dev
+          "$HOME/.local/bin/uv" run pytest -q
+          "$HOME/.local/bin/uv" run app.py --help > /dev/null
           echo "sources OK"
 
       - name: Create GitHub Release
