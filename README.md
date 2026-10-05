@@ -12,8 +12,8 @@ and it works. Think of it as a lighter FreeView for a quick look, with every
 label toggleable on and off.
 
 It runs in the browser: the **inflated and pial surfaces side by side**, with
-linked cameras, rendered by the three.js engine of
-[surface-annotate](https://github.com/yongninglei/app_surface_annotate). A small
+linked cameras, rendered by a three.js engine in `static/engine/` (it started out in the now
+retired [surface-annotate](https://github.com/yongninglei/app_surface_annotate)). A small
 Python server (FastAPI + **nibabel**) reads the files, and every input path
 comes from `config.yaml`, so pointing it at a different study, subject tree or
 label set is a config edit, not a code change. Paths are also editable live in
@@ -655,7 +655,7 @@ static/index.html      the page: tool tabs, layer panels, drawing panels, view c
 static/app.js          layer logic (heatmap, clusters, atlas, manual) + drawing, on top of the engine
 static/draw.js         DOM-free seeded fill / dilate / erode (node --test tests/draw.test.mjs)
 static/style.css       page style
-static/vendor/surface_annotate/  vendored viewer engine (viewer.js, mesh.js); see its README
+static/engine/         the surface engine (viewer.js, mesh.js), master copy; see its README
 utils/config.py        config loading + sub/hemi naming + resolve_dir (path templates)
 utils/surface.py       read surface geometry (inflated & pial) and curvature
 utils/labels.py        .label / .func.gii readers, .label writer

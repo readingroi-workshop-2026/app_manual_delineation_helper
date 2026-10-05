@@ -1,7 +1,7 @@
 // Label-editing algorithms on the vertex graph, FreeView style (no three.js,
 // no DOM, so `node --test tests/draw.test.mjs` can run them). They build on
 // the adjacency of the vendored mesh.js and live here, not there, because the
-// vendored files are copies of surface-annotate's and are never edited.
+// engine files are shared with app_surface_t1w_labeling (see static/engine/README.md).
 
 // FreeView's "custom fill": every vertex reachable from `seed` through
 // vertices where allowed[v] is 1, never stepping onto a barrier vertex (the

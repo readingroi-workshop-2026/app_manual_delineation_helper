@@ -5,8 +5,9 @@
 // per-vertex colour buffer that every mesh renders; an app paints into it
 // (`paint(out)`) and everything it draws shows on every surface at once.
 //
-// This file is shared: app_manual_delineation_helper vendors a copy under
-// static/vendor/surface_annotate/. Keep it free of app-specific UI and state.
+// Master copy: app_manual_delineation_helper/static/engine/ (it came from
+// app_surface_annotate, retired 2026-10-05). app_surface_t1w_labeling keeps a
+// copy under static/vendor/engine/. Keep it free of app-specific UI and state.
 
 import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";

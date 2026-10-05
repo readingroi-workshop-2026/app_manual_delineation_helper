@@ -1,7 +1,7 @@
 // node --test tests/draw.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildAdjacency } from "../static/vendor/surface_annotate/mesh.js";
+import { buildAdjacency } from "../static/engine/mesh.js";
 import { floodFill, dilate, erode } from "../static/draw.js";
 
 // A 1 x 6 strip of triangles: vertices 0-5 on top, 6-11 below.

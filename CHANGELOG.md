@@ -5,6 +5,11 @@ This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PA
 
 ## [Unreleased]
 
+### Changed
+- The surface engine (`viewer.js`, `mesh.js`) is now owned here, in `static/engine/`
+  (was a vendored copy of app_surface_annotate, which is retired).
+  app_surface_t1w_labeling carries a copy; a test checks it matches.
+
 ### Added
 - **Transparent thresholding** of the heatmap (Taylor, Aggarwal & Bandettini
   2026, Nature Methods, doi:10.1038/s41592-026-03206-7), on by default:

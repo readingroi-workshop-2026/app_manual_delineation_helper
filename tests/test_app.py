@@ -159,16 +159,18 @@ def test_only_listed_files_are_served(dataset):
 def test_page_and_engine_served(dataset):
     _, c = dataset
     assert "Delineation Helper" in c.get("/").text
-    assert c.get("/static/vendor/surface_annotate/viewer.js").status_code == 200
+    assert c.get("/static/engine/viewer.js").status_code == 200
 
 
-def test_vendored_engine_matches_surface_annotate():
-    upstream = REPO.parent / "app_surface_annotate" / "src" / "surface_annotate" / "static"
-    if not upstream.is_dir():
-        pytest.skip("app_surface_annotate is not checked out next to this repo")
+def test_engine_copy_matches_t1w_labeling():
+    """static/engine/ is the master; app_surface_t1w_labeling carries a copy."""
+    copy = REPO.parent / "app_surface_t1w_labeling" / "src" / "surface_t1w_labeling" / "static" / "vendor" / "engine"
+    if not copy.is_dir():
+        pytest.skip("app_surface_t1w_labeling is not checked out next to this repo")
     for name in ("viewer.js", "mesh.js"):
-        assert filecmp.cmp(upstream / name, REPO / "static" / "vendor" / "surface_annotate" / name,
-                           shallow=False), f"{name} differs from surface-annotate; re-copy it"
+        assert filecmp.cmp(REPO / "static" / "engine" / name, copy / name, shallow=False), (
+            f"{name}: app_surface_t1w_labeling's copy differs; cp static/engine/{name} there"
+        )
 
 
 def test_drawn_labels_save_and_reload(dataset):

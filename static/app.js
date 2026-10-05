@@ -1,5 +1,5 @@
 // Delineation helper — view heatmaps, auto clusters, atlas and manual labels
-// on inflated + pial side by side (the surface-annotate engine, vendored), and
+// on inflated + pial side by side (the surface engine in static/engine/), and
 // draw labels on top of them: Contour (paths + FreeView-style seeded fill),
 // Brush and Erase, saved to <sub>/label/<folder>/.
 //
@@ -7,8 +7,8 @@
 // each layer shows on both surfaces, and every toggle is applied in the
 // browser immediately — the server only hands out files (and saves drawn ones).
 
-import { SurfaceViewer, PATH_COLOR, blend, paintCurvature, curvatureControls } from "./vendor/surface_annotate/viewer.js";
-import * as M from "./vendor/surface_annotate/mesh.js";
+import { SurfaceViewer, PATH_COLOR, blend, paintCurvature, curvatureControls } from "./engine/viewer.js";
+import * as M from "./engine/mesh.js";
 import * as D from "./draw.js";
 
 const $ = (id) => document.getElementById(id);

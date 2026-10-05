@@ -2,7 +2,7 @@
 """Surface viewer for manual ROI delineation: inflated + pial side by side.
 
 A small FastAPI server reads the FreeSurfer surfaces and the four layers, and a
-browser page (static/, rendered by the surface-annotate three.js engine) shows
+browser page (static/, rendered by the three.js engine in static/engine/) shows
 them. Every layer toggle, colour, fill and threshold applies instantly in the
 browser; nothing is re-plotted on the server.
 
