@@ -7,7 +7,7 @@
 // each layer shows on both surfaces, and every toggle is applied in the
 // browser immediately — the server only hands out files (and saves drawn ones).
 
-import { SurfaceViewer, PATH_COLOR, blend, paintCurvature } from "./vendor/surface_annotate/viewer.js";
+import { SurfaceViewer, PATH_COLOR, blend, paintCurvature, curvatureControls } from "./vendor/surface_annotate/viewer.js";
 import * as M from "./vendor/surface_annotate/mesh.js";
 import * as D from "./draw.js";
 
@@ -17,7 +17,9 @@ const CUSTOM = "__custom__";
 
 const S = {
   session: null, meta: null,
-  sub: null, hemi: "lh", n: 0, adj: null, curv: null, curvOn: true,
+  sub: null, hemi: "lh", n: 0, adj: null, curv: null, curvOn: true, curvOpts: {},
+  cursorOn: true,       // Navigate: a click places the cursor (ring + cross) on every surface
+  cursorV: -1,
   templates: {},        // layer -> folder template ({sub} allowed)
   heat: null,           // {name, values, min, max}
   heatAlpha: 0.85,
@@ -116,7 +118,7 @@ function heatColor(t) {
 
 function paint(out) {
   const n = S.n;
-  paintCurvature(out, S.curv, n, S.curvOn);
+  paintCurvature(out, S.curv, n, S.curvOn, S.curvOpts);
   if (S.heat) paintHeat(out);
   // Layer order: clusters, then atlas (annots under labels), then manual.
   for (const kind of KINDS) {
@@ -185,11 +187,29 @@ function paintHeat(out) {
   }
 }
 
+// Surfaces whose coordinates are positions in the brain. The inflated (and
+// sphere) meshes are not: inflating moves every vertex, so their x, y, z mean
+// nothing anatomically (x = 4.8 for a left-hemisphere vertex, say).
+const ANATOMICAL = ["pial", "white", "smoothwm", "midthickness", "orig"];
+
 function hoverAt(v, vi) {
   if (vi < 0) { $("hover").textContent = ""; return; }
-  const c = view.coords[v.surf];
-  const parts = [`vertex ${vi}`,
-    `${v.surf} (${c[3 * vi].toFixed(1)}, ${c[3 * vi + 1].toFixed(1)}, ${c[3 * vi + 2].toFixed(1)})`];
+  // Always report an anatomical position, whichever panel is hovered.
+  const anat = Object.keys(view.coords).filter((s) => ANATOMICAL.includes(s));
+  $("hover").textContent = describe(vi, anat.length ? [anat[0]] : [v.surf]).join("  ·  ");
+}
+
+// What is at vertex vi: coordinates on `surfs` (x, y, z in surface RAS),
+// curvature, heatmap, labels.
+function describe(vi, surfs) {
+  const parts = [`vertex ${vi}`];
+  for (const surf of surfs) {
+    const c = view.coords[surf];
+    if (!c) continue;
+    const xyz = `(${c[3 * vi].toFixed(1)}, ${c[3 * vi + 1].toFixed(1)}, ${c[3 * vi + 2].toFixed(1)})`;
+    parts.push(ANATOMICAL.includes(surf) ? `${surf} x,y,z ${xyz}`
+                                         : `${surf} mesh ${xyz} (not anatomical)`);
+  }
   if (S.curv) parts.push(`curv ${S.curv[vi].toFixed(3)}`);
   if (S.heat) parts.push(`${S.heat.name}: ${S.heat.values[vi].toFixed(3)}`);
   for (const it of S.items.values()) {
@@ -201,12 +221,45 @@ function hoverAt(v, vi) {
   }
   const inDrawn = [...S.drawn].filter(([, l]) => l.mask[vi]).map(([n]) => n);
   if (inDrawn.length) parts.push(`drawn: ${inDrawn.join(", ")}`);
-  $("hover").textContent = parts.join("  ·  ");
+  return parts;
+}
+
+// ---------------------------------------------------------------- cursor
+// Navigate mode: a click puts a cursor (ring + cross) on that vertex, on every
+// surface panel at once, so you can see where the same point is on inflated and pial.
+function placeCursor(vi) {
+  S.cursorV = vi;
+  view.setCursor(S.cursorOn ? vi : -1);
+  showCursorInfo();
+}
+function showCursorInfo() {
+  const box = $("cursor-info");
+  if (S.cursorV < 0 || !S.cursorOn) {
+    box.textContent = S.cursorOn ? "Click the surface to place the cursor." : "Cursor hidden.";
+    return;
+  }
+  const vi = S.cursorV;
+  box.innerHTML = describe(vi, Object.keys(view.coords)).map((t) => `<div>${t}</div>`).join("") +
+    `<div class="t1w" id="cursor-t1w">T1w: …</div>`;
+  // Inflated has no meaning in the T1w: report the vertex on white and pial.
+  getJSON(`${S.sub}/${S.hemi}/t1w/${vi}`).then((d) => {
+    const el = $("cursor-t1w");
+    if (!el || S.cursorV !== vi) return; // moved on meanwhile
+    const f = (a) => a.map((x) => x.toFixed(1)).join(", ");
+    // Everything in x, y, z order. The raw file index of a conformed .mgz is
+    // stored L, I, A (x, z, y and flipped), so it is shown apart and labelled.
+    el.innerHTML = `<b>T1w space</b> <span class="dim">(x, y, z · scanner RAS via ${d.transform})</span>` +
+      Object.entries(d.surfaces).map(([surf, e]) =>
+        `<div>${surf}: RAS (${f(e.scanner)})${e.voxel ? ` · voxel x,y,z [${e.voxel.join(", ")}]` : ""}` +
+        (e.voxel_file ? `<div class="dim">&nbsp;&nbsp;${d.volume} file index [${e.voxel_file.join(", ")}] (${d.file_axes} order, as in Freeview)</div>` : "") +
+        `</div>`).join("");
+  }).catch((e) => { const el = $("cursor-t1w"); if (el) el.textContent = `T1w: ${e.message}`; });
 }
 
 // ---------------------------------------------------------------- drawing
 function clickAt(v, vi) {
-  if (S.tool === "navigate" || vi < 0) return;
+  if (S.tool === "navigate") { if (vi >= 0 && S.cursorOn) placeCursor(vi); return; }
+  if (vi < 0) return;
   if (!ensureActive()) return;
   if (S.tool === "contour") {
     if (S.contour.awaitingSeed) { commitContour(vi); return; }
@@ -275,8 +328,10 @@ function updateContour() {
   S.contour.path = path;
   view.requestColor();
   const n = pts.length;
+  const cutHint = n >= 2 && S.clickMode === "path" && $("c-path").checked && !S.contour.awaitingSeed
+    ? " — to cut a region: run both ends past its edge, press F, click the side to fill" : "";
   if (n) status(`Path: ${n} point${n > 1 ? "s" : ""}, adding at ${S.contour.cursor}` +
-                (S.contour.awaitingSeed ? " — click inside the region" : ""));
+                (S.contour.awaitingSeed ? " — click inside the region" : cutHint));
 }
 
 function closeContour() {
@@ -347,7 +402,9 @@ function regionAt(seed) {
 
 // FreeView's custom fill: flood from the clicked vertex, bounded by the ticked
 // conditions, then add it to (or remove it from) the active label.
+const SNAP_MM = 3; // a fill click this close to a passing vertex still counts
 function seedFill(seed) {
+  let snapped = "";
   let allowed;
   try { allowed = valueMask() || new Uint8Array(S.n).fill(1); }
   catch (e) { status(`Fill: ${e.message}`, true); return; }
@@ -364,24 +421,73 @@ function seedFill(seed) {
   }
   let barrier = null;
   if ($("c-path").checked && S.contour.points.length >= 2) {
+    // The wall is the path exactly as drawn: OPEN, a line. (It used to be closed
+    // last -> first once it had 3 points, which cut a big region a second time.)
+    // Enter still closes the path and fills the loop.
     barrier = new Uint8Array(S.n);
-    for (const i of contourPath(S.contour.points.length >= 3)) barrier[i] = 1;
+    for (const i of contourPath(false)) barrier[i] = 1;
   }
-  if (!allowed[seed]) { status("Fill: the clicked vertex fails the conditions", true); return; }
+  if (!allowed[seed]) {
+    // A click just outside a blob (e.g. on its faded, below-threshold rim):
+    // snap to the nearest vertex that passes, within SNAP_MM on the anatomy.
+    const coords = S.coords.pial || S.coords.white || S.coords[S.pathSurface];
+    let best = -1, bd = Infinity;
+    for (const w of M.brush(S.adj, coords, seed, SNAP_MM)) {
+      if (!allowed[w] || barrier?.[w]) continue;
+      const d = Math.hypot(coords[3 * w] - coords[3 * seed], coords[3 * w + 1] - coords[3 * seed + 1],
+                           coords[3 * w + 2] - coords[3 * seed + 2]);
+      if (d < bd) { bd = d; best = w; }
+    }
+    if (best < 0) {
+      const why = $("c-heat").checked && S.heat
+        ? `${S.heat.name} is ${S.heat.values[seed].toPrecision(3)} here, not above ${+currentThreshold().toPrecision(4)}, and nothing above it within ${SNAP_MM} mm`
+        : "the clicked vertex fails the conditions";
+      status(`Fill: ${why}`, true);
+      return;
+    }
+    snapped = ` (you clicked vertex ${seed}, below the bound; snapped ${bd.toFixed(1)} mm)`;
+    seed = best;
+  }
   if (barrier?.[seed]) { status("Fill: click beside the path, not on it", true); return; }
   const fill = D.floodFill(S.adj, seed, allowed, barrier);
   let count = 0;
   for (let i = 0; i < S.n; i++) count += fill[i];
+  // Did the path actually cut the region? If the fill reaches everything the
+  // region holds off the path, the flood went round an end of the path.
+  let leak = "";
+  if (barrier) {
+    const whole = D.floodFill(S.adj, seed, allowed, null);
+    let missed = 0;
+    for (let i = 0; i < S.n; i++) if (whole[i] && !barrier[i] && !fill[i]) missed++;
+    if (!missed) leak = " — the path does not split this region (the fill went round an end): extend both ends past its edge";
+  }
   if (count > S.n * 0.25 &&
       !confirm(`This fill covers ${count.toLocaleString()} vertices (${Math.round((100 * count) / S.n)}% ` +
                "of the hemisphere) — nothing bounds it. Apply anyway?")) {
     status("Fill cancelled");
     return;
   }
-  applyFill(fill, `Fill from vertex ${seed}`);
+  applyFill(fill, `Fill from vertex ${seed}${snapped}`);
+  if (leak) status($("status").textContent + leak, true);
 }
 
 // ---------------------------------------------------------------- drawn labels
+// "Save to" dropdown: the configured delineation folders first, then the other
+// folders this subject has under label/, then a free name.
+function fillFolderPick() {
+  const sel = $("draw-folder-pick");
+  if (!sel || !S.session) return;
+  const preset = S.session.draw_folders || [];
+  const have = new Set(S.meta?.label_folders || []);
+  const others = [...have].filter((f) => !preset.includes(f)).sort();
+  const opt = (f, note = "") => `<option value="${f}">${f}${note}</option>`;
+  sel.innerHTML =
+    (preset.length ? `<optgroup label="delineation steps">${preset.map((f) => opt(f, have.has(f) ? "" : "  (new)")).join("")}</optgroup>` : "") +
+    (others.length ? `<optgroup label="other folders of ${S.sub}">${others.map((f) => opt(f)).join("")}</optgroup>` : "") +
+    `<option value="${CUSTOM}">custom… (type a name above)</option>`;
+  sel.value = [...sel.options].some((o) => o.value === S.drawFolder) ? S.drawFolder : CUSTOM;
+}
+
 function addLabel(name) {
   name = name.trim();
   if (!NAME_RE.test(name)) { status("Label names: letters, digits and . _ + - only", true); return; }
@@ -716,6 +822,7 @@ function renderHeatmaps() {
 }
 
 function renderManualFolders() {
+  fillFolderPick();   // the "Save to" dropdown lists the same label/ folders
   const sel = $("manual-folder");
   const atlas = S.templates.atlas.replace(/\/+$/, "");
   const opts = S.meta.label_folders.map((f) => [`${atlas}/${f}`, `${f}/`]);
@@ -845,6 +952,8 @@ async function loadSubject() {
     renderLegend();
     S.adj = M.buildAdjacency(faces, S.n);
     view.load(surfaces, faces, S.n);
+    S.cursorV = -1;             // vertex numbers differ between subjects / hemispheres
+    showCursorInfo();
     view.surfaceControls($("surf-toggles"));
     if (!meta.surfaces.includes(S.pathSurface)) {
       S.pathSurface = meta.surfaces.includes("inflated") ? "inflated" : meta.surfaces[0];
@@ -903,6 +1012,12 @@ function setSeg(id, attr, val) {
 function setClickMode(m) {
   S.clickMode = m;
   setSeg("click-mode", "click", m);
+  // "Put a dot on a heatmap blob to fill it" needs the map as a bound; without
+  // it a fill floods the whole hemisphere. Tick it for the user.
+  if (m === "fill" && S.heat && !$("c-heat").checked) {
+    $("c-heat").checked = true;
+    status(`Click now fills from the seed, inside ${S.heat.name} > ${+currentThreshold().toPrecision(4)}`);
+  }
 }
 function setRadius(r) {
   S.radius = Math.min(10, Math.max(0.5, r));
@@ -918,6 +1033,14 @@ function wireDrawing() {
     setSeg("draw-mode", "mode", S.drawMode);
   };
   $("click-mode").onclick = (e) => e.target.dataset.click && setClickMode(e.target.dataset.click);
+  // Ticking the map bound means "fill the blob I click": switch the click to fill
+  // (unless a path is being drawn, which the fill may use as a border).
+  $("c-heat").addEventListener("change", (e) => {
+    if (e.target.checked && S.clickMode === "path" && !S.contour.points.length) {
+      setClickMode("fill");
+      status("Click now fills from the seed (Click: fills from seed; F switches back to path points)");
+    }
+  });
   $("path-surface").onchange = (e) => { S.pathSurface = e.target.value; updateContour(); };
   $("seed-fill").onchange = (e) => { S.seedFill = e.target.checked; };
   $("show-hidden").onchange = (e) => { S.showHidden = e.target.checked; updateContour(); };
@@ -932,6 +1055,13 @@ function wireDrawing() {
   };
   const folder = $("draw-folder");
   folder.onkeydown = (e) => { if (e.key === "Enter") folder.blur(); };
+  // One click to switch between the delineation steps' folders.
+  $("draw-folder-pick").onchange = (e) => {
+    const v = e.target.value;
+    if (v === CUSTOM) { folder.focus(); folder.select(); fillFolderPick(); return; }
+    folder.value = v;
+    folder.onchange();
+  };
   folder.onchange = async () => {
     const f = folder.value.trim();
     if (!NAME_RE.test(f)) { status("Folder name: letters, digits and . _ + - only", true); folder.value = S.drawFolder; return; }
@@ -940,6 +1070,7 @@ function wireDrawing() {
       folder.value = S.drawFolder; return;
     }
     S.drawFolder = f;
+    fillFolderPick();
     try { await loadDrawn(); } catch (e) { status(`Could not read the folder — ${e.message}`, true); }
   };
   $("new-label").onclick = () => { addLabel($("new-name").value); $("new-name").value = ""; };
@@ -1054,6 +1185,10 @@ function wire() {
   };
   $("link").onchange = (e) => { view.link = e.target.checked; };
   $("curv-on").onchange = (e) => { S.curvOn = e.target.checked; view.requestColor(); };
+  $("cursor-on").onchange = (e) => { S.cursorOn = e.target.checked; placeCursor(S.cursorV); };
+  $("cursor-clear").onclick = () => placeCursor(-1);
+  // Threshold / mode / brightness of the curvature shading, remembered in this browser.
+  curvatureControls($("curv-opts"), S.curvOpts, () => view.requestColor(), "delineationHelper.curv");
   $("views").onclick = (e) => e.target.dataset.view && view.setView(e.target.dataset.view, S.hemi);
   $("png").onclick = () => {
     if (!S.meta) return;
@@ -1073,6 +1208,7 @@ async function init() {
     S.templates = { ...S.session.templates };
     S.drawFolder = S.session.draw_folder;
     $("draw-folder").value = S.drawFolder;
+    fillFolderPick();
     $("roi-names").innerHTML = S.session.roi_names.map((n) => `<option value="${esc(n)}">`).join("");
     for (const el of document.querySelectorAll(".dir")) el.value = S.templates[el.dataset.kind];
     $("sub").innerHTML = S.session.subjects.map((s) => `<option>${s}</option>`).join("");

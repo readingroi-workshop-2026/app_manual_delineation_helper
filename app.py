@@ -54,7 +54,7 @@ from utils.discovery import (
     surface_labels_in,
 )
 from utils.labels import load_gifti_values, read_label_vertices, write_label
-from utils.surface import load_curv, load_geometry, surf_path
+from utils.surface import load_curv, load_geometry, surf_path, tkr_to_scanner, voxel_affines
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = APP_DIR / "config.yaml"
@@ -170,6 +170,7 @@ def create_app(config: dict) -> FastAPI:
             "roi_colors": ROI_COLORS,
             "roi_names": [name for name, _ in WORD_ROIS],
             "draw_folder": str(config.get("draw_label_dir", "manual_delineation")),
+            "draw_folders": [str(f) for f in (config.get("draw_label_folders") or [])],
         }
 
     @app.get("/api/{sub}/{hemi}/meta")
@@ -209,6 +210,37 @@ def create_app(config: dict) -> FastAPI:
             "layers": layers,
             "label_folders": folders,
         }
+
+    @app.get("/api/{sub}/{hemi}/t1w/{vertex}")
+    def t1w_coords(sub: str, hemi: str, vertex: int) -> dict:
+        """Where vertex `vertex` lies in T1w space, on white and on pial: surface (tkr)
+        RAS, scanner RAS, and the voxel of mri/T1.mgz (or orig.mgz) it falls in."""
+        sub, hemi_fs, _ = check(sub, hemi)
+        sdir = fs_subject_dir(config, sub)
+        anat = [n for n in ("white", "pial") if surf_path(config, sub, hemi_fs, n).is_file()]
+        if not anat:
+            raise HTTPException(404, "no white or pial surface: inflated has no T1w position")
+        xform, source = tkr_to_scanner(sdir, surf_path(config, sub, hemi_fs, anat[0]))
+        t1 = next((sdir / "mri" / n for n in ("T1.mgz", "orig.mgz") if (sdir / "mri" / n).is_file()), None)
+        if t1:
+            file_aff, xyz_aff, axes = voxel_affines(t1)
+            file_inv, xyz_inv = np.linalg.inv(file_aff), np.linalg.inv(xyz_aff)
+        out = {"vertex": vertex, "transform": source, "volume": f"mri/{t1.name}" if t1 else None,
+               "file_axes": axes if t1 else None, "surfaces": {}}
+        for name in anat:
+            coords = load_geometry(surf_path(config, sub, hemi_fs, name))[0]
+            if not 0 <= vertex < len(coords):
+                raise HTTPException(400, f"vertex {vertex} out of range 0..{len(coords) - 1}")
+            tkr = np.append(coords[vertex].astype(float), 1.0)
+            ras = xform @ tkr
+            entry = {"tkr": tkr[:3].round(2).tolist(), "scanner": ras[:3].round(2).tolist()}
+            if t1:
+                # x, y, z order (R, A, S) -- what the sampling tool / WM page show --
+                # and the raw file index (FreeSurfer LIA, what Freeview shows).
+                entry["voxel"] = np.rint(xyz_inv @ ras)[:3].astype(int).tolist()
+                entry["voxel_file"] = np.rint(file_inv @ ras)[:3].astype(int).tolist()
+            out["surfaces"][name] = entry
+        return out
 
     @app.get("/api/{sub}/{hemi}/surface/{surf}")
     def surface(sub: str, hemi: str, surf: str) -> Response:

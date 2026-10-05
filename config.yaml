@@ -48,4 +48,11 @@ manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 # Labels drawn in the page (Contour / Brush / Erase tabs) are saved to
 # <fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label. This is the folder name
 # the page starts with; it is editable there. xyz are taken from <hemi>.white.
-draw_label_dir: manual_delineation
+draw_label_dir: tiger_ROI_auto
+
+# Offered in the "Save to" dropdown (plus every folder the subject already has
+# under label/). One per delineation step, so switching is one click:
+#   tiger_ROI_auto       ROIs from the auto clusters (e.g. RWvsAllNotext_score)
+#   tiger_ROI_manual     ROIs from a t-threshold map (e.g. RWvsAllNotext_mean_raw)
+#   tiger_anat_landmark  anatomical landmarks drawn by hand
+draw_label_folders: [tiger_ROI_auto, tiger_ROI_manual, tiger_anat_landmark]

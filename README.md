@@ -119,6 +119,86 @@ Every folder there is offered in the panel's folder list. To use a folder
 elsewhere, type its path in the box (`{sub}` = subject, Enter to apply). Only
 the selected hemisphere's files show up.
 
+### Seeing clusters inside the sulci (x-ray)
+
+Lower a surface's opacity (View → the slider next to *pial*) and the clusters, labels and
+heatmap that lie **behind** the front surface, down a sulcus or on the far bank, show through
+it. That gives the full spatial pattern on the pial, not only the patches that face you. The
+lower the opacity, the stronger they show. Rotating does not make them flash: the x-ray pass is
+offset slightly so it never z-fights with the front surface. The grey surface stays a single clean front layer,
+and buried parts are drawn flat (unlit), so you can tell them from the ones in front.
+*x-ray* (next to *mesh*) turns this off per surface. Clusters read best with **fill** on.
+
+### Where drawn labels go: one folder per delineation step
+
+*Save to* (Drawn labels) decides the folder, `<subject>/label/<folder>/`. The dropdown under it
+switches in one click between the steps listed in `config.yaml` → `draw_label_folders`:
+
+| folder | step |
+|---|---|
+| `tiger_ROI_auto` | ROIs from the auto clusters (e.g. `RWvsAllNotext_score`) |
+| `tiger_ROI_manual` | ROIs from a t-threshold map (e.g. `RWvsAllNotext_mean_raw`) |
+| `tiger_anat_landmark` | anatomical landmarks drawn by hand |
+
+Below them it lists the subject's other `label/` folders, plus *custom…* to type a new name.
+Switching loads that folder's saved labels (it asks first if there are unsaved ones). The page
+starts in `draw_label_dir` (`tiger_ROI_auto`).
+
+### Filling a heatmap blob with one click
+
+1. **Navigate › 1 · Heatmap**: pick the map and the threshold.
+2. **Contour** tool (<kbd>C</kbd>), then tick **inside the thresholded map**. *Click* switches to
+   **fills from seed** by itself (or press <kbd>F</kbd>).
+3. **Click a blob.** Every connected vertex above the threshold is added to the active label.
+   With *Fills: remove*, it is taken out instead.
+
+A click just outside the blob, e.g. on the faded below-threshold rim that transparent
+thresholding shows, **snaps to the nearest vertex above the threshold within 3 mm**. The
+status line says so. A click farther away says why nothing was filled. A leftover path with
+*up to and including the path* ticked acts as a border: press <kbd>Esc</kbd> to clear it.
+
+### Cutting a big region in two with a path
+
+When one blob (or label region) is too big, draw a path across it and fill one side:
+
+1. **Contour** tool, *Click: adds path point*. Click points **across** the region, with both ends
+   **past its edge** (outside the blob, below the threshold). The path is a wall.
+2. Press <kbd>F</kbd> (*fills from seed*). Keep **up to and including the path** ticked, together
+   with **inside the thresholded map** (or *inside the clicked layer label* for a label).
+3. **Click one side.** Only that side fills, up to and including the path.
+4. For the other side as a second ROI: add a new label, tick **out of other drawn labels** (so
+   the path vertices are not in both), and click the other side.
+
+The wall is the path **exactly as drawn**: an open line. <kbd>Enter</kbd> instead closes the path
+and fills the loop. If an end stops inside the region, the fill flows round it. Then the status
+line warns "the path does not split this region" and you can extend that end (<kbd>Tab</kbd>
+switches which end new points go to). A wiggly path can also cut off a small extra pocket.
+Click it to add it.
+
+### The cursor: where did I click?
+
+In **Navigate**, a click on either surface puts a **cursor** (green ring + cross) on that vertex,
+on the inflated and the pial panel at once, so you see where the same point lies on both. Where
+the pial surface hides it (down a sulcus), it is drawn dim. The **Cursor** section of the Navigate
+panel lists the vertex number, its inflated and pial coordinates, curvature, heatmap value and the
+labels it falls in. *show cursor* turns it on and off; *clear* removes it. It is cleared when you
+switch subject or hemisphere, because vertex numbers differ between them.
+
+**Which coordinates?** The bottom bar always gives the vertex's **pial** position (x, y, z in
+FreeSurfer surface RAS), even while you hover the inflated panel. Inflated coordinates are
+positions on the inflated balloon, not in the brain, and the readout marks them *not
+anatomical*.
+
+**Where is it in the T1w?** Under the readout, *T1w space* gives the clicked vertex on the
+**white** and the **pial** surface as scanner RAS coordinates (the T1w's world coordinates, as
+in Freeview's "RAS" or an fMRIPrep `space-T1w` image), and the **voxel** of `mri/T1.mgz` it
+falls in. Everything is in **x, y, z** order (R, A, S): the voxel is counted along x, y and z,
+the same numbers the sampling tool and its WM page show. The raw file index is listed under it
+for Freeview. A conformed `.mgz` is stored **L, I, A**, so that index reads (x, z, y), flipped:
+e.g. x,y,z voxel `[71, 96, 130]` is file index `[184, 125, 96]`. The inflated surface has no T1w position, so only white
+and pial are reported. The transform is `Norig · Torig⁻¹` from `mri/orig.mgz`, or the `c_ras`
+stored in the surface file when there is no `mri/` folder.
+
 ### Transparent thresholding
 
 By default the heatmap is shown with **transparent thresholding**

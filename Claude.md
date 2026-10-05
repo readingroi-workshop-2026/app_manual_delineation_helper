@@ -44,6 +44,41 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   writes the ctab from the labels actually passed, and uses `--no-unknown`
   with a 0-based ctab: without it unlabelled vertices are index 0 and nibabel
   (so this app) reads every region name off by one.
-- `example_dataset/freesurfer-with_t2/<sub>/label/anat_label_tiger/` is written
-  by surface-annotate; it is the maintainer's data, not repo content — don't
-  commit it unless asked.
+- **Drawn-label folders = delineation steps.** The maintainer works in three
+  steps, one `label/` folder each (`config.yaml` → `draw_label_folders`,
+  offered in the "Save to" dropdown `#draw-folder-pick`, filled by
+  `fillFolderPick()` from the session list + the subject's own folders):
+  `tiger_ROI_auto` (ROIs from the auto clusters, e.g. RWvsAllNotext_score),
+  `tiger_ROI_manual` (ROIs from a t-threshold map, e.g. RWvsAllNotext_mean_raw),
+  `tiger_anat_landmark` (anatomical landmarks by hand). `draw_label_dir` is the
+  start folder. On 2026-10-05 sub-02's `tiger_delineation_autocluster`,
+  `tiger_delineation_t-threshold` and `anat_label_tiger` were renamed to these
+  three, and the three (empty) folders were created for every subject. Empty
+  folders are not in git.
+- The example dataset's `label/` folders are the maintainer's data. Commit
+  them only when asked (sub-02's renamed folders were, on request).
+- **Cursor (Navigate tab).** A click calls the engine's `setCursor(vertex)`;
+  `describe()` builds both the readout and the bottom bar. The bottom bar always
+  shows an ANATOMICAL surface (pial, else white), never inflated: inflated
+  coordinates are not positions in the brain and read as nonsense (x = 4.8 for
+  a left-hemisphere vertex). The readout marks them "not anatomical".
+- **T1w coordinates: `GET /api/{sub}/{hemi}/t1w/{vertex}`** -> white and pial
+  in tkr RAS, scanner RAS (`Norig @ inv(Torig)` from mri/orig.mgz, else the
+  surface's c_ras; `utils/surface.tkr_to_scanner`) and the T1.mgz voxel. The
+  voxel is given in **x, y, z (RAS+ canonical) order** -- identical to the
+  sampling tool's / WM page's -- and separately as the raw file index
+  (`voxel_file`). A conformed .mgz is stored LIA, so the file index reads
+  (x, z, y) flipped; showing only that one was mistaken for z-first.
+- **Fill from seed** (Contour, Click: fills from seed, F). Ticking "inside the
+  thresholded map" switches the click to fill, and choosing fill with a heatmap
+  loaded ticks it: without that bound a fill floods 100% of the hemisphere.
+  A seed below the bound snaps to the nearest passing vertex within `SNAP_MM`
+  (3 mm, on pial) -- transparent thresholding draws the sub-threshold rim, so
+  people click it.
+- **Cutting a region with a path.** With "up to and including the path" the
+  wall is the path EXACTLY as drawn, i.e. OPEN (`contourPath(false)`). It used
+  to be closed last -> first once it had 3 points, which cut a big region a
+  second time; Enter is what closes a path. `seedFill` re-floods without the
+  wall and warns when the path does not split the region (an end inside it).
+- Curvature options, the cursor marker and the x-ray of buried labels come from
+  the vendored engine (see app_surface_annotate's Claude.md).

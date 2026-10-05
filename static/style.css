@@ -152,3 +152,14 @@ h3 { font-size: 11px; color: var(--dim); font-weight: normal; margin: 10px 0 2px
 #colorbar .bar { position: relative; }
 #cb-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; }
 .cite { color: var(--dim); font-size: 11px; margin-left: auto; }
+
+/* curvature options (viewer.js curvatureControls) */
+.curv-opts { padding-left: 18px; }
+.curv-opts .row { margin: 3px 0; }
+.curv-opts .curv-lab { width: 62px; flex: none; color: var(--dim); }
+.curv-opts output { width: 36px; flex: none; text-align: right; font-variant-numeric: tabular-nums; color: var(--dim); }
+.curv-opts select { flex: 1; }
+
+/* cursor readout: T1w-space block */
+#cursor-info .t1w { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+#cursor-info .t1w b { color: var(--text); font-weight: 600; }

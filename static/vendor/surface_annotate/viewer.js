@@ -33,12 +33,94 @@ export function blend(out, i, rgb, a) {
   out[3 * i + 2] = out[3 * i + 2] * (1 - a) + (rgb[2] / 255) * a;
 }
 
-// Two-tone FreeSurfer curvature: sulci (curv > 0) dark, gyri light.
-export function paintCurvature(out, curv, n, on = true) {
+// FreeSurfer curvature shading (curv > threshold = sulcus = dark).
+//   binary: two tones, sulci `dark`, gyri `light` (the default look);
+//   smooth: a grey ramp from light to dark over threshold ± range, so the
+//           depth of a fold shows, not just its sign.
+// Brightness is 0..1. The defaults reproduce the original two-tone shading.
+export const CURV_DEFAULTS = Object.freeze({ mode: "binary", threshold: 0, range: 0.15, dark: 0.46, light: 0.72 });
+
+export function paintCurvature(out, curv, n, on = true, opts = {}) {
+  const o = { ...CURV_DEFAULTS, ...opts };
+  const span = Math.max(1e-6, o.range);
   for (let i = 0; i < n; i++) {
-    const g = curv && on ? (curv[i] > 0 ? 0.46 : 0.72) : 0.6;
+    let g = 0.6;
+    if (curv && on) {
+      const c = curv[i];
+      if (o.mode === "smooth") {
+        const t = Math.min(1, Math.max(0, 0.5 + (c - o.threshold) / (2 * span)));
+        g = o.light + (o.dark - o.light) * t;
+      } else g = c > o.threshold ? o.dark : o.light;
+    }
     out[3 * i] = out[3 * i + 1] = out[3 * i + 2] = g;
   }
+}
+
+// Controls for the options above, written into `box`. `opts` is mutated in
+// place and `onChange()` called on every edit. With `storageKey`, the
+// settings are remembered in this browser (localStorage) across reloads.
+export function curvatureControls(box, opts, onChange, storageKey = null) {
+  if (storageKey) {
+    try { Object.assign(opts, JSON.parse(localStorage.getItem(storageKey) || "{}")); } catch {}
+  }
+  for (const k of Object.keys(CURV_DEFAULTS)) opts[k] ??= CURV_DEFAULTS[k];
+  const save = () => { if (storageKey) try { localStorage.setItem(storageKey, JSON.stringify(opts)); } catch {} };
+  const row = (label, input, title = "") =>
+    `<label class="row" title="${title}"><span class="curv-lab">${label}</span>${input}</label>`;
+  const range = (k, min, max, step) =>
+    `<input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}"><output data-o="${k}"></output>`;
+  const draw = () => {
+    box.innerHTML =
+      row("mode", `<select data-k="mode"><option value="binary">binary (two tones)</option>
+        <option value="smooth">smooth (grey ramp)</option></select>`,
+          "binary: sulcus / gyrus only · smooth: shade follows how deep or high the fold is") +
+      row("threshold", range("threshold", -0.5, 0.5, 0.01),
+          "curv value where gyrus turns into sulcus (0 = FreeSurfer's sign)") +
+      (opts.mode === "smooth" ? row("range ±", range("range", 0.02, 1, 0.01), "curv span of the ramp around the threshold") : "") +
+      row("sulci", range("dark", 0, 1, 0.01), "brightness of sulci (curv above threshold)") +
+      row("gyri", range("light", 0, 1, 0.01), "brightness of gyri (curv below threshold)") +
+      `<div class="row"><button data-reset>reset curvature</button></div>`;
+    for (const el of box.querySelectorAll("[data-k]")) {
+      el.value = opts[el.dataset.k];
+      el.oninput = el.onchange = () => {
+        const k = el.dataset.k;
+        opts[k] = k === "mode" ? el.value : +el.value;
+        if (k === "mode") { draw(); } else show();
+        save(); onChange();
+      };
+    }
+    box.querySelector("[data-reset]").onclick = () => { Object.assign(opts, CURV_DEFAULTS); draw(); save(); onChange(); };
+    show();
+  };
+  const show = () => {
+    for (const o of box.querySelectorAll("[data-o]")) o.textContent = (+opts[o.dataset.o]).toFixed(2);
+  };
+  draw();
+  return box;
+}
+
+// Ring + cross sprite for the cursor marker (white, tinted by the material colour),
+// with a dark rim so it reads on light gyri and dark sulci alike.
+let _cursorTex = null;
+function cursorTexture() {
+  if (_cursorTex) return _cursorTex;
+  const n = 64, cv = document.createElement("canvas");
+  cv.width = cv.height = n;
+  const g = cv.getContext("2d");
+  const ring = (w, col) => {
+    g.strokeStyle = col; g.lineWidth = w;
+    g.beginPath(); g.arc(n / 2, n / 2, n * 0.3, 0, 2 * Math.PI); g.stroke();
+    g.beginPath();
+    g.moveTo(n * 0.5, n * 0.04); g.lineTo(n * 0.5, n * 0.3); g.moveTo(n * 0.5, n * 0.7); g.lineTo(n * 0.5, n * 0.96);
+    g.moveTo(n * 0.04, n * 0.5); g.lineTo(n * 0.3, n * 0.5); g.moveTo(n * 0.7, n * 0.5); g.lineTo(n * 0.96, n * 0.5);
+    g.stroke();
+  };
+  ring(10, "rgba(0,0,0,0.85)");
+  ring(4.5, "#ffffff");
+  g.fillStyle = "#ffffff";
+  g.beginPath(); g.arc(n / 2, n / 2, 3.5, 0, 2 * Math.PI); g.fill();
+  _cursorTex = new THREE.CanvasTexture(cv);
+  return _cursorTex;
 }
 
 const VIEWS = {
@@ -95,8 +177,12 @@ export class SurfaceViewer {
     }
     this.viewers = [];
     this.n = n;
+    this.cursorVertex = -1;
     this.coords = Object.fromEntries(surfaces);
     this.colorAttr = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
+    // 0..1, how coloured a vertex is (0 = curvature grey): what the x-ray pass
+    // shows through a see-through surface. Shared like the colours.
+    this.hlAttr = new THREE.BufferAttribute(new Float32Array(n), 1);
     for (const [surf, coords] of surfaces) this._makeViewer(surf, coords, faces);
     this.requestColor();
   }
@@ -130,6 +216,7 @@ export class SurfaceViewer {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.BufferAttribute(coords, 3));
     geom.setAttribute("color", this.colorAttr); // one attribute object, shared by every mesh
+    geom.setAttribute("hl", this.hlAttr);
     // Own copy per mesh: MeshBVH reorders the index in place, which would
     // invalidate the other mesh's tree if the buffer were shared.
     geom.setIndex(new THREE.BufferAttribute(new Uint32Array(faces), 1));
@@ -157,6 +244,29 @@ export class SurfaceViewer {
     v.depthPre.visible = false;
     v.depthPre.renderOrder = -1;
 
+    // X-ray of the coloured vertices (clusters, labels, heatmap) that the
+    // see-through front layer hides, e.g. a cluster down a sulcus on the pial.
+    // Only where something is in front (GreaterDepth against the front layer's
+    // depth), unlit, its strength rising as the surface opacity falls. The grey
+    // surface itself stays one clean front layer.
+    v.xray = new THREE.Mesh(geom, new THREE.ShaderMaterial({
+      uniforms: { opacity: { value: 0.6 } },
+      vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      vertexShader: `attribute float hl; varying vec3 vC; varying float vH;
+        void main() { vC = color; vH = hl; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform float opacity; varying vec3 vC; varying float vH;
+        void main() { if (vH < 0.05) discard; gl_FragColor = vec4(vC, opacity * vH);
+        #include <colorspace_fragment>
+        }`,
+    }));
+    v.xray.material.depthFunc = THREE.GreaterDepth;
+    // Pull the x-ray slightly toward the camera: on the front layer it then
+    // always fails GreaterDepth instead of z-fighting with itself (labels
+    // flashing while rotating). Buried layers are mm behind, far beyond this.
+    Object.assign(v.xray.material, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
+    v.xray.visible = false;
+    v.xray.renderOrder = 2;
+
     // The polyline (e.g. a contour) is drawn twice. Visible pass: depth-tested,
     // bright, 3 px (Line2: WebGL's own lines are always 1 px). Hidden pass:
     // only where the surface is in front (GreaterDepth), dim and dashed -- so
@@ -179,12 +289,27 @@ export class SurfaceViewer {
     v.pointsHidden.material.depthFunc = THREE.GreaterDepth;
     v.pointsObj.renderOrder = v.pointsHidden.renderOrder = 4;
 
-    scene.add(v.depthPre, v.mesh, v.wire, v.pathLine, v.pathHidden, v.pointsObj, v.pointsHidden);
+    // Cursor marker (setCursor): a ring + cross sprite, bright where visible,
+    // dim where the surface hides it. Separate from the path points above.
+    const tex = cursorTexture();
+    v.cursorObj = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({
+      size: 26, sizeAttenuation: false, map: tex, color: 0xffffff, transparent: true, alphaTest: 0.05,
+      depthWrite: false }));
+    v.cursorHidden = new THREE.Points(v.cursorObj.geometry, new THREE.PointsMaterial({
+      size: 22, sizeAttenuation: false, map: tex, color: 0xffffff, transparent: true, opacity: 0.35,
+      depthWrite: false }));
+    v.cursorHidden.material.depthFunc = THREE.GreaterDepth;
+    v.cursorObj.renderOrder = v.cursorHidden.renderOrder = 5;
+    v.cursorObj.visible = v.cursorHidden.visible = false;
+
+    scene.add(v.depthPre, v.mesh, v.wire, v.xray, v.pathLine, v.pathHidden, v.pointsObj, v.pointsHidden,
+              v.cursorObj, v.cursorHidden);
     this.viewers.push(v);
     const st = this.surfState[surf];
     if (st) {
       this.setOpacity(v, st.opacity ?? 1);
       this.setWire(v, !!st.wire);
+      this.setXray(v, st.xray ?? true);
       this.setVisible(v, st.visible ?? true);
     }
     this.resize(v);
@@ -246,7 +371,7 @@ export class SurfaceViewer {
     }
   }
 
-  _state(v) { return (this.surfState[v.surf] ??= { visible: true, opacity: 1, wire: false }); }
+  _state(v) { return (this.surfState[v.surf] ??= { visible: true, opacity: 1, wire: false, xray: true }); }
 
   // The camera as direction, up, zoom and pan relative to the mesh's own
   // size, so it can be put back on another subject (setViewState). Null
@@ -292,6 +417,14 @@ export class SurfaceViewer {
     m.transparent = a < 1;
     m.needsUpdate = true;
     this._syncDepthPre(v);
+    this._syncXray(v);
+  }
+  // Show coloured vertices hidden behind a see-through surface (opacity < 1).
+  setXray(v, on) { this._state(v).xray = on; this._syncXray(v); }
+  _syncXray(v) {
+    const st = this._state(v), a = v.mesh.material.opacity;
+    v.xray.visible = (st.xray ?? true) && a < 1;
+    v.xray.material.uniforms.opacity.value = Math.min(0.9, 0.15 + 0.85 * (1 - a));
   }
   setWire(v, on) { this._state(v).wire = on; v.wire.visible = on; this._syncDepthPre(v); }
   _syncDepthPre(v) { v.depthPre.visible = v.wire.visible || v.mesh.material.opacity < 1; }
@@ -305,8 +438,10 @@ export class SurfaceViewer {
       const st = this._state(v);
       row.innerHTML = `<label class="surf-name"><input type="checkbox" ${st.visible ? "checked" : ""}> ${v.surf}</label>
         <input type="range" min="0.05" max="1" step="0.05" value="${st.opacity}" title="surface opacity">
-        <label title="triangle mesh overlay; zoom in to see individual edges"><input type="checkbox" ${st.wire ? "checked" : ""}> mesh</label>`;
-      const [show, alpha, mesh] = row.querySelectorAll("input");
+        <label title="triangle mesh overlay; zoom in to see individual edges"><input type="checkbox" ${st.wire ? "checked" : ""}> mesh</label>
+        <label title="below full opacity, show clusters / labels hidden behind the surface (e.g. down a sulcus); lower opacity = stronger"><input type="checkbox" ${st.xray ?? true ? "checked" : ""}> x-ray</label>`;
+      const [show, alpha, mesh, xray] = row.querySelectorAll("input");
+      xray.onchange = () => this.setXray(v, xray.checked);
       show.onchange = () => this.setVisible(v, show.checked);
       alpha.oninput = () => this.setOpacity(v, +alpha.value);
       mesh.onchange = () => this.setWire(v, mesh.checked);
@@ -344,6 +479,24 @@ export class SurfaceViewer {
       v.pointsObj.geometry.setAttribute("color", new THREE.BufferAttribute(pc, 3));
       v.pointsObj.geometry.computeBoundingSphere();
       v.pointsHidden.visible = showHidden;
+    }
+  }
+
+  // A cursor marker at vertex `vi` on every panel (the same vertex on each
+  // surface); -1 hides it. `color` is a CSS colour.
+  setCursor(vi, color = "#39ff88") {
+    this.cursorVertex = vi;
+    for (const v of this.viewers) {
+      const on = vi >= 0 && vi < this.n;
+      v.cursorObj.visible = v.cursorHidden.visible = on;
+      if (!on) continue;
+      const c = this.coords[v.surf], nrm = v.mesh.geometry.attributes.normal.array;
+      const p = new Float32Array(3);
+      for (let d = 0; d < 3; d++) p[d] = c[3 * vi + d] + nrm[3 * vi + d] * 0.6;
+      v.cursorObj.geometry.setAttribute("position", new THREE.BufferAttribute(p, 3));
+      v.cursorObj.geometry.computeBoundingSphere();
+      v.cursorObj.material.color.set(color);
+      v.cursorHidden.material.color.set(color);
     }
   }
 
@@ -400,6 +553,14 @@ export class SurfaceViewer {
       this.needsColor = false;
       this.hooks.paint?.(this.colorAttr.array);
       this.colorAttr.needsUpdate = true;
+      // How coloured each vertex is (0 = grey; curvature is always r = g = b),
+      // ramped so faint tints (a heatmap fading below threshold) don't x-ray as haze.
+      const c = this.colorAttr.array, hl = this.hlAttr.array;
+      for (let i = 0; i < this.n; i++) {
+        const r = c[3 * i], g = c[3 * i + 1], b = c[3 * i + 2];
+        hl[i] = Math.min(1, Math.max(0, (Math.max(r, g, b) - Math.min(r, g, b) - 0.04) / 0.16));
+      }
+      this.hlAttr.needsUpdate = true;
     }
     for (const v of this.viewers) {
       if (v.el.classList.contains("hidden")) continue;

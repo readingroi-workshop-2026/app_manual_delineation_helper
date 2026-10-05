@@ -90,6 +90,8 @@
       <h2>Drawn labels</h2>
       <label class="row" title="labels are saved to the subject's label/&lt;folder&gt;/; Enter to apply">Save to
         <span class="dim mono">label/</span><input id="draw-folder" class="mono"></label>
+      <div class="row indent" title="your delineation folders (config: draw_label_folders) and the folders this subject already has">
+        <select id="draw-folder-pick" class="mono"></select></div>
       <div class="row">
         <input id="new-name" list="roi-names" placeholder="label name, e.g. mFus-words">
         <datalist id="roi-names"></datalist>
@@ -128,6 +130,16 @@
     </section>
 
     <div class="tab-navigate">
+    <section>
+      <h2>Cursor</h2>
+      <div class="row">
+        <label title="in Navigate, a click marks that vertex on every surface panel"><input type="checkbox" id="cursor-on" checked> show cursor (click to place)</label>
+        <span class="spacer"></span>
+        <button id="cursor-clear" title="remove the cursor">clear</button>
+      </div>
+      <div id="cursor-info" class="hint">Click the surface to place the cursor.</div>
+    </section>
+
     <section>
       <h2>2 · Auto clusters</h2>
       <input class="dir" data-kind="clusters" title="*_Cluster_*.label folder; {sub} = subject; Enter to apply">
@@ -168,6 +180,7 @@
       <div id="surf-toggles"></div>
       <label class="row"><input type="checkbox" id="link" checked> link cameras (rotate, zoom, pan)</label>
       <label class="row"><input type="checkbox" id="curv-on" checked> curvature shading</label>
+      <div id="curv-opts" class="curv-opts"></div>
       <div class="row wrap" id="views">
         <button data-view="lateral">Lateral</button>
         <button data-view="medial">Medial</button>
