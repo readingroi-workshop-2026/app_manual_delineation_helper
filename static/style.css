@@ -128,3 +128,27 @@ header #png { margin-left: auto; }
 #legend li.group:hover { background: none; }
 #prev, #next { padding: 3px 6px; }
 header label select { margin: 0 2px; }
+
+/* collapsible sidebar (☰ / backslash) and narrow-window layout */
+#sidebar-toggle { padding: 2px 8px; font-size: 15px; line-height: 1.2; }
+body.no-sidebar aside { display: none; }
+@media (max-width: 900px) {
+  header { flex-wrap: wrap; row-gap: 4px; }
+  aside { width: 260px; }
+}
+
+/* tool tabs: Navigate shows the layer panels, the others the drawing panels */
+.seg.tabs { margin: 4px 0 6px; }
+body.tool-navigate .tab-draw, body:not(.tool-navigate) .tab-navigate { display: none; }
+body:not(.tool-contour) #opt-contour, body:not(.tool-brush):not(.tool-erase) #opt-brush { display: none; }
+h3 { font-size: 11px; color: var(--dim); font-weight: normal; margin: 10px 0 2px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+#draw-folder { flex: 1; min-width: 0; }
+#new-name { flex: 1; min-width: 0; }
+#c-curv { flex: 1; }
+.active-label { margin: 0 0 4px; padding: 3px 6px; border-radius: 4px; background: #2c3340;
+  outline: 1px solid var(--btn-on); font-size: 12px; }
+.row.indent { padding-left: 20px; }
+#colorbar .bar { position: relative; }
+#cb-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; }
+.cite { color: var(--dim); font-size: 11px; margin-left: auto; }

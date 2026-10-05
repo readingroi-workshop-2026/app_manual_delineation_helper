@@ -17,6 +17,7 @@
 </head>
 <body>
 <header>
+  <button id="sidebar-toggle" title="hide the sidebar (\)">☰</button>
   <strong>Delineation Helper</strong>
   <label>Subject
     <button id="prev" title="previous subject (,)">◀</button><select id="sub"></select><button id="next" title="next subject (.)">▶</button></label>
@@ -28,6 +29,88 @@
 
 <main>
   <aside>
+    <div class="seg tabs" id="tools">
+      <button data-tool="navigate" title="view layers (N)">Navigate</button>
+      <button data-tool="contour" title="paths and FreeView-style fill (C)">Contour</button>
+      <button data-tool="brush" title="paint into the active label (B)">Brush</button>
+      <button data-tool="erase" title="erase from the active label (E)">Erase</button>
+    </div>
+
+    <div class="tab-draw">
+    <p id="drawing-into" class="active-label"></p>
+    <section id="opt-contour">
+      <h2>Contour &amp; fill</h2>
+      <div class="row">
+        <span>Fills</span>
+        <div class="seg small" id="draw-mode">
+          <button data-mode="add" title="closing a path or a fill adds vertices to the active label">add</button>
+          <button data-mode="remove" title="closing a path or a fill removes vertices from the active label">remove</button>
+        </div>
+      </div>
+      <div class="row">
+        <span>Click</span>
+        <div class="seg small" id="click-mode">
+          <button data-click="path" title="each click adds a path point (F to switch)">adds path point</button>
+          <button data-click="fill" title="a click floods from that vertex, bounded by the conditions below (F to switch)">fills from seed</button>
+        </div>
+      </div>
+      <label class="row">Path follows <select id="path-surface"></select></label>
+      <label class="row"><input type="checkbox" id="seed-fill"> on Enter, click to pick the inside</label>
+      <label class="row" title="where a gyrus hides the path, draw that stretch dim and dashed"><input type="checkbox" id="show-hidden" checked> show hidden path (dashed)</label>
+      <p class="hint">Click to add points · <kbd>Tab</kbd> switch head/tail ·
+        <kbd>⌫</kbd> remove point · <kbd>Enter</kbd> close &amp; fill · <kbd>Esc</kbd> discard</p>
+
+      <h3>Fill from seed: stay…</h3>
+      <label class="row"><input type="checkbox" id="c-path" checked> up to and including the path</label>
+      <label class="row" title="the map picked in Navigate › 1 · Heatmap, made binary: only vertices above the threshold count"><input type="checkbox" id="c-heat"> inside the thresholded map</label>
+      <div class="row indent dim">map: <span id="c-map" class="mono"></span></div>
+      <div class="row indent">threshold
+        <input type="range" id="c-thr-r" min="0" max="1" step="0.001" value="0.1" title="same threshold as the Heatmap panel">
+        <input type="number" id="c-thr-n" step="any" class="num"></div>
+      <label class="row">on <select id="c-curv">
+        <option value="any">any curvature</option>
+        <option value="sulci">sulci only (curv &gt; 0)</option>
+        <option value="gyri">gyri only (curv &lt; 0)</option>
+      </select></label>
+      <label class="row" title="the clicked vertex's ticked cluster / atlas / manual label, or its annot region"><input type="checkbox" id="c-inside"> inside the clicked layer label / region</label>
+      <label class="row"><input type="checkbox" id="c-others"> out of other drawn labels</label>
+      <div class="row wrap">
+        <button id="trim" title="remove the active label's vertices outside the thresholded map / off the chosen curvature">Trim label to map / curvature</button>
+      </div>
+    </section>
+
+    <section id="opt-brush">
+      <h2>Brush</h2>
+      <label class="row">Radius <input type="range" id="radius" min="0.5" max="10" step="0.5" value="2">
+        <output id="radius-out">2 mm</output></label>
+      <p class="hint">Click, or hold <kbd>Shift</kbd> and drag, to paint · <kbd>[</kbd> <kbd>]</kbd> size</p>
+    </section>
+
+    <section>
+      <h2>Drawn labels</h2>
+      <label class="row" title="labels are saved to the subject's label/&lt;folder&gt;/; Enter to apply">Save to
+        <span class="dim mono">label/</span><input id="draw-folder" class="mono"></label>
+      <div class="row">
+        <input id="new-name" list="roi-names" placeholder="label name, e.g. mFus-words">
+        <datalist id="roi-names"></datalist>
+        <button id="new-label">Add</button>
+      </div>
+      <ul id="drawn" class="list"></ul>
+      <div class="row wrap">
+        <button id="save">Save active</button>
+        <button id="save-all">Save all</button>
+        <button id="fill-holes">Fill holes</button>
+        <button id="dilate" title="grow by one ring of vertices">Dilate</button>
+        <button id="erode" title="shrink by one ring of vertices">Erode</button>
+        <button id="clear">Clear</button>
+      </div>
+      <label class="row">fill opacity
+        <input type="range" id="draw-alpha" min="0" max="1" step="0.05" value="0.45"></label>
+      <p class="hint" id="draw-out"></p>
+      <p class="hint">Drag rotate · right-drag pan · wheel zoom · <kbd>Ctrl/⌘ Z</kbd> undo</p>
+    </section>
+    </div>
+
     <section>
       <h2>1 · Heatmap</h2>
       <input class="dir" data-kind="heatmap" title="*.func.gii folder; {sub} = subject; Enter to apply">
@@ -37,9 +120,14 @@
         <input type="number" id="thr-n" step="any" class="num"></label>
       <label class="row">Opacity
         <input type="range" id="heat-alpha" min="0" max="1" step="0.05" value="0.85"></label>
-      <div id="colorbar"><div class="bar"></div><div class="ticks"><span id="cb-lo"></span><span id="cb-hi"></span></div></div>
+      <label class="row" title="Taylor, Aggarwal & Bandettini (2026) Go figure: transparency in neuroscience images preserves context and clarifies interpretation. Nature Methods. doi:10.1038/s41592-026-03206-7"><input type="checkbox" id="heat-tt" checked> transparent threshold
+        <a class="cite" href="https://doi.org/10.1038/s41592-026-03206-7" target="_blank" rel="noopener">Taylor et al. 2026</a></label>
+      <label class="row indent" title="outline the vertices above the threshold, as the paper recommends"><input type="checkbox" id="heat-outline" checked> outline suprathreshold</label>
+      <div id="colorbar"><div class="bar"><span id="cb-mark" title="threshold"></span></div><div class="ticks"><span id="cb-lo"></span><span id="cb-mid"></span><span id="cb-hi"></span></div></div>
+      <p class="hint" id="tt-hint">Below threshold the map is not hidden: it fades out quadratically toward 0, so the context of each cluster stays visible.</p>
     </section>
 
+    <div class="tab-navigate">
     <section>
       <h2>2 · Auto clusters</h2>
       <input class="dir" data-kind="clusters" title="*_Cluster_*.label folder; {sub} = subject; Enter to apply">
@@ -73,6 +161,7 @@
       <label class="row">fill opacity
         <input type="range" id="fill-alpha" min="0.05" max="1" step="0.05" value="0.6"></label>
     </section>
+    </div>
 
     <section>
       <h2>View</h2>

@@ -8,8 +8,13 @@ existing **flat layout** (`app.py`, `utils/`, `scripts/`) and is not a package
 ## What this repo is
 
 A browser surface viewer for the reading-ROI delineation workshop: heatmaps,
-auto clusters, atlas and manual labels on inflated + pial side by side. It is
-view-only — drawing lives in `../app_surface_annotate`. The `scripts/`
+auto clusters, atlas and manual labels on inflated + pial side by side, plus
+drawing (Contour / Brush / Erase tabs) of labels saved to
+`<fs_dir>/<sub>/label/<folder>/`. The brush/contour interaction is ported from
+`../app_surface_annotate`'s app.js (not shared code); `static/draw.js` holds
+this repo's own DOM-free fill/dilate/erode, so the vendored engine stays an
+untouched copy. `scripts/make_annot.py` combines a folder's ROIs into an annot.
+The `scripts/`
 (`gen_manual_label*.py`, `sync_autoroi_maps.py`, ...) are the CSV → label
 pipeline and follow the analysis-script conventions; the viewer does not.
 
@@ -32,6 +37,13 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   contrasts are re-ticked, never single cluster IDs.
 - Heatmap/cluster files are matched by BIDS `hemi-L/R`; atlas/manual labels by
   FreeSurfer `lh./rh.` prefix (`normalize_hemi` returns both).
+- **The only write endpoint is `POST /api/{sub}/{hemi}/drawn`**: folder and
+  label name must match `NAME_RE` (one path component, no leading dot), so it
+  can only write `<fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label`.
+- **mris_label2annot maps the k-th `--l` to ctab index k.** `make_annot.py`
+  writes the ctab from the labels actually passed, and uses `--no-unknown`
+  with a 0-based ctab: without it unlabelled vertices are index 0 and nibabel
+  (so this app) reads every region name off by one.
 - `example_dataset/freesurfer-with_t2/<sub>/label/anat_label_tiger/` is written
   by surface-annotate; it is the maintainer's data, not repo content — don't
   commit it unless asked.

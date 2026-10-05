@@ -5,6 +5,21 @@ This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PA
 
 ## [Unreleased]
 
+### Added
+- **Transparent thresholding** of the heatmap (Taylor, Aggarwal & Bandettini
+  2026, Nature Methods, doi:10.1038/s41592-026-03206-7), on by default:
+  suprathreshold opaque and outlined, subthreshold fading as `(v/thr)²`;
+  colour bar shows 0 → max with a threshold tick. Toggle back to a hard cut.
+- **Drawing.** Sidebar tabs Navigate · Contour · Brush · Erase. Contour draws
+  shortest-path paths (close & fill) and FreeView-style seeded fills bounded by
+  the path, heatmap > threshold, sulci/gyri, the clicked layer label / annot
+  region, and other drawn labels; fills add or remove. Brush/Erase as in
+  surface-annotate. Trim to heatmap/curv, fill holes, dilate, erode, undo.
+  Labels save to `<fs_dir>/<sub>/label/<folder>/` (folder editable in the page,
+  default `draw_label_dir`); word-ROI names are suggested.
+- `scripts/make_annot.py`: combine a folder's ROI labels into a `.annot` with
+  a fixed colour per ROI (`WORD_ROIS`, adds `LOC-words`).
+
 ### Changed
 - **New viewer GUI.** Streamlit + Plotly are replaced by a browser page served
   by `app.py` (FastAPI + typer CLI; `uv run app.py`, `./launch.sh`). Surfaces
@@ -24,6 +39,8 @@ This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PA
     opacity/mesh, heatmap + threshold, label fill/regions/legend state and
     fully ticked contrasts all carry over.
   - Hover readout: vertex, coordinates, curvature, heatmap value, labels.
+  - Collapsible sidebar (☰ or `\`), remembered per browser; panels scale with
+    the window and browser zoom without cropping the brain.
 - `manual_label_dir` defaults to `.../label/tiger_delineation`; new `surfaces`
   config key; `default_surface` is gone (both surfaces are shown).
 - Requires Python ≥ 3.10.

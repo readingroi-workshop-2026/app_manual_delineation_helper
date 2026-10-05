@@ -12,12 +12,17 @@ Layers (each reads a directory from config.yaml, editable live in the page):
   3 Atlas labels      atlas_label_dir   <hemi>.*.label and <hemi>.*.annot
   4 Manual labels     manual_label_dir  <hemi>.*.label (e.g. tiger_delineation/)
 
+Labels drawn in the page (Contour / Brush / Erase tabs) are saved to
+<fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label, the folder named in the page
+(default: draw_label_dir). Nothing else is ever written.
+
 Run:  uv run app.py            (then open http://localhost:8501)
 """
 
 from __future__ import annotations
 
 import base64
+import re
 import threading
 import webbrowser
 from pathlib import Path
@@ -27,19 +32,28 @@ import typer
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from rich.console import Console
 
 from utils import __version__
-from utils.config import fs_dir, load_config, normalize_hemi, normalize_sub, resolve_dir
+from utils.config import (
+    fs_dir,
+    fs_subject_dir,
+    load_config,
+    normalize_hemi,
+    normalize_sub,
+    resolve_dir,
+)
 from utils.discovery import (
     CLUSTER_COLORS,
     ROI_COLORS,
+    WORD_ROIS,
     cluster_labels_in,
     clusters_by_contrast,
     heatmap_overlays_in,
     surface_labels_in,
 )
-from utils.labels import load_gifti_values, read_label_vertices
+from utils.labels import load_gifti_values, read_label_vertices, write_label
 from utils.surface import load_curv, load_geometry, surf_path
 
 APP_DIR = Path(__file__).resolve().parent
@@ -51,6 +65,15 @@ LAYER_KEYS = {
     "atlas": "atlas_label_dir",
     "manual": "manual_label_dir",
 }
+# Save-folder and label names: one path component, no leading dot, so a name
+# can never climb out of the subject's label/ folder.
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+
+class DrawnLabel(BaseModel):
+    folder: str
+    name: str
+    vertices: list[int]
 
 console = Console()
 cli = typer.Typer(add_completion=False, pretty_exceptions_show_locals=False)
@@ -100,6 +123,20 @@ def create_app(config: dict) -> FastAPI:
             raise HTTPException(404, f"unknown subject {sub!r}")
         return sub, hemi_fs, hemi_bids
 
+    def drawn_dir(sub: str, folder: str) -> Path:
+        """<fs_dir>/<sub>/label/<folder>, the only place the page can write to."""
+        if not NAME_RE.match(folder or ""):
+            raise HTTPException(400, f"bad folder name {folder!r}: use letters, digits and . _ + -")
+        return fs_subject_dir(config, sub) / "label" / folder
+
+    def label_coords(sub: str, hemi_fs: str) -> tuple[np.ndarray, str]:
+        """Label xyz come from white, as in FreeSurfer's own labels; else pial, else any."""
+        for name in ["white", "pial", *surfaces]:
+            path = surf_path(config, sub, hemi_fs, name)
+            if path.is_file():
+                return load_geometry(path)[0], name
+        raise HTTPException(404, "no surface to take label coordinates from")
+
     def layer_dir(kind: str, sub: str, template: str | None) -> Path:
         tmpl = template if template else str(config.get(LAYER_KEYS[kind], ""))
         return resolve_dir(config, tmpl, sub)
@@ -131,6 +168,8 @@ def create_app(config: dict) -> FastAPI:
             "templates": {k: str(config.get(v, "")) for k, v in LAYER_KEYS.items()},
             "cluster_colors": CLUSTER_COLORS,
             "roi_colors": ROI_COLORS,
+            "roi_names": [name for name, _ in WORD_ROIS],
+            "draw_folder": str(config.get("draw_label_dir", "manual_delineation")),
         }
 
     @app.get("/api/{sub}/{hemi}/meta")
@@ -230,6 +269,32 @@ def create_app(config: dict) -> FastAPI:
                 "labels": base64.b64encode(ids.astype(np.int32).tobytes()).decode(),
             }
         raise HTTPException(404, f"no {kind} file {name!r}")
+
+    @app.get("/api/{sub}/{hemi}/drawn")
+    def drawn(sub: str, hemi: str, folder: str) -> dict:
+        """Every <hemi>.*.label in a save folder, to keep editing them."""
+        sub, hemi_fs, _ = check(sub, hemi)
+        d = drawn_dir(sub, folder)
+        labels = {
+            name: read_label_vertices(Path(path))
+            for name, path in surface_labels_in(str(d), hemi_fs).items()
+        }
+        return {"dir": str(d), "exists": d.is_dir(), "labels": labels}
+
+    @app.post("/api/{sub}/{hemi}/drawn")
+    def save_drawn(sub: str, hemi: str, body: DrawnLabel) -> dict:
+        sub, hemi_fs, _ = check(sub, hemi)
+        if not NAME_RE.match(body.name):
+            raise HTTPException(400, f"bad label name {body.name!r}: use letters, digits and . _ + -")
+        path = drawn_dir(sub, body.folder) / f"{hemi_fs}.{body.name}.label"
+        coords, coord_surf = label_coords(sub, hemi_fs)
+        comment = (f", from subject {sub} vox2ras=TkReg {hemi_fs} ROI={body.name} "
+                   f"coords={coord_surf} drawn-with=delineation-helper-{__version__}")
+        try:
+            n = write_label(path, body.vertices, coords, comment)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"path": str(path), "n_vertices": n}
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

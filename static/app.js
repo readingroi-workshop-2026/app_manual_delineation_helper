@@ -1,12 +1,15 @@
 // Delineation helper — view heatmaps, auto clusters, atlas and manual labels
-// on inflated + pial side by side (the surface-annotate engine, vendored).
+// on inflated + pial side by side (the surface-annotate engine, vendored), and
+// draw labels on top of them: Contour (paths + FreeView-style seeded fill),
+// Brush and Erase, saved to <sub>/label/<folder>/.
 //
 // Everything is painted into the engine's one per-vertex colour buffer, so
 // each layer shows on both surfaces, and every toggle is applied in the
-// browser immediately — the server only hands out files.
+// browser immediately — the server only hands out files (and saves drawn ones).
 
-import { SurfaceViewer, blend, paintCurvature } from "./vendor/surface_annotate/viewer.js";
+import { SurfaceViewer, PATH_COLOR, blend, paintCurvature } from "./vendor/surface_annotate/viewer.js";
 import * as M from "./vendor/surface_annotate/mesh.js";
+import * as D from "./draw.js";
 
 const $ = (id) => document.getElementById(id);
 const KINDS = ["clusters", "atlas", "manual"];
@@ -18,6 +21,8 @@ const S = {
   templates: {},        // layer -> folder template ({sub} allowed)
   heat: null,           // {name, values, min, max}
   heatAlpha: 0.85,
+  heatTT: true,         // transparent thresholding (Taylor et al. 2026), see paintHeat
+  heatOutline: true,    // outline the suprathreshold vertices
   thresholds: {},       // heatmap name -> threshold, kept across subjects
   items: new Map(),     // `${kind}:${name}` -> loaded label/annot layer
   colors: {},           // `${kind}:${name}` -> [r,g,b], kept across subjects
@@ -25,11 +30,23 @@ const S = {
   fillAlpha: 0.6,
   open: new Set(),      // expanded contrast / annot rows
   highlight: null,      // item key hovered in the legend: drawn filled
+  // Drawing (Contour / Brush / Erase tabs)
+  coords: {},           // surface name -> Float32Array, for paths and the brush
+  tool: "navigate", drawMode: "add", clickMode: "path", radius: 2,
+  seedFill: false, showHidden: true, pathSurface: null,
+  contour: { points: [], cursor: "tail", awaitingSeed: null, path: [] },
+  drawFolder: "", drawDir: "",
+  drawn: new Map(),     // name -> {mask, visible, dirty}; colours via colorFor("drawn", name)
+  active: null,
+  drawAlpha: 0.45,
+  undo: [],
 };
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+const isDirty = () => [...S.drawn.values()].some((l) => l.dirty);
 
 // ---------------------------------------------------------------- utilities
-async function api(path) {
-  const r = await fetch(`/api/${path}`);
+async function api(path, opts) {
+  const r = await fetch(`/api/${path}`, opts);
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch {}
@@ -71,7 +88,21 @@ function colorFor(kind, name) {
 }
 
 // ---------------------------------------------------------------- engine
-const view = new SurfaceViewer($("viewers"), { paint, onHover: hoverAt });
+const isPaintTool = () => S.tool === "brush" || S.tool === "erase";
+const view = new SurfaceViewer($("viewers"), {
+  paint,
+  onHover: hoverAt,
+  onClick: clickAt,
+  // Shift+drag with the brush paints instead of rotating.
+  onDragStart: (v, ev) => {
+    if (!(isPaintTool() && ev.shiftKey && ensureActive())) return false;
+    beginStroke();
+    paintAt(v, view.pick(v, ev));
+    return true;
+  },
+  onDrag: (v, ev) => paintAt(v, view.pick(v, ev)),
+  onDragEnd: () => endStroke(),
+});
 window.delineationHelper = { S, view }; // for the devtools console
 
 // Red -> orange -> yellow, from the threshold up to the map's maximum.
@@ -86,15 +117,7 @@ function heatColor(t) {
 function paint(out) {
   const n = S.n;
   paintCurvature(out, S.curv, n, S.curvOn);
-  if (S.heat) {
-    const { values, max } = S.heat;
-    const thr = currentThreshold();
-    const span = max - thr || 1;
-    for (let i = 0; i < n; i++) {
-      const v = values[i];
-      if (v > thr) blend(out, i, heatColor((v - thr) / span), S.heatAlpha);
-    }
-  }
+  if (S.heat) paintHeat(out);
   // Layer order: clusters, then atlas (annots under labels), then manual.
   for (const kind of KINDS) {
     const items = [...S.items.values()].filter((it) => it.kind === kind && it.on && !it.hidden);
@@ -115,6 +138,51 @@ function paint(out) {
       for (const i of it.outline) blend(out, i, color, 1);
     }
   }
+  // What you draw goes on top, then the path being drawn.
+  for (const [name, l] of S.drawn) {
+    if (!l.visible) continue;
+    const color = colorFor("drawn", name);
+    const a = name === S.active ? Math.min(1, S.drawAlpha + 0.1) : S.drawAlpha;
+    const edge = M.maskOutline(S.adj, l.mask);
+    for (let i = 0; i < n; i++) {
+      if (edge[i]) blend(out, i, color, 1);
+      else if (l.mask[i] && a > 0) blend(out, i, color, a);
+    }
+  }
+  for (const i of S.contour.awaitingSeed || S.contour.path) out.set(PATH_COLOR, 3 * i);
+}
+
+// Transparent thresholding — Taylor PA, Aggarwal H, Bandettini PA (2026),
+// "Go figure: transparency in neuroscience images preserves context and
+// clarifies interpretation", Nature Methods, doi:10.1038/s41592-026-03206-7.
+// Instead of hiding everything below the threshold, colour the whole map by
+// value (0 -> max), keep suprathreshold vertices opaque and outlined, and let
+// subthreshold ones fade out quadratically, opacity (v / thr)^2. Unticked, the
+// map is the classic hard cut: only v > thr, coloured from thr to max.
+function paintHeat(out) {
+  const { values, max } = S.heat;
+  const n = S.n, thr = currentThreshold();
+  if (S.heatTT) {
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      if (!(v > 0)) continue;
+      const a = v > thr ? 1 : (v / thr) ** 2;
+      blend(out, i, heatColor(v / max), S.heatAlpha * a);
+    }
+  } else {
+    const span = max - thr || 1;
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      if (v > thr) blend(out, i, heatColor((v - thr) / span), S.heatAlpha);
+    }
+  }
+  if (S.heatOutline) {
+    const supra = Uint8Array.from(values, (v) => (v > thr ? 1 : 0));
+    const edge = M.maskOutline(S.adj, supra);
+    // Dark, not the paper's white: on a mesh the outline is a whole ring of
+    // vertices, and white rings wash out small blobs on a speckled map.
+    for (let i = 0; i < n; i++) if (edge[i]) blend(out, i, [20, 20, 20], 0.85);
+  }
 }
 
 function hoverAt(v, vi) {
@@ -131,7 +199,301 @@ function hoverAt(v, vi) {
       parts.push(`${it.name}: ${k >= 0 ? it.names[k] : "—"}`);
     } else if (it.mask[vi]) parts.push(it.name);
   }
+  const inDrawn = [...S.drawn].filter(([, l]) => l.mask[vi]).map(([n]) => n);
+  if (inDrawn.length) parts.push(`drawn: ${inDrawn.join(", ")}`);
   $("hover").textContent = parts.join("  ·  ");
+}
+
+// ---------------------------------------------------------------- drawing
+function clickAt(v, vi) {
+  if (S.tool === "navigate" || vi < 0) return;
+  if (!ensureActive()) return;
+  if (S.tool === "contour") {
+    if (S.contour.awaitingSeed) { commitContour(vi); return; }
+    if (S.clickMode === "fill") { seedFill(vi); return; }
+    const pts = S.contour.points;
+    if (S.contour.cursor === "tail") pts.push(vi); else pts.unshift(vi);
+    updateContour();
+  } else {
+    beginStroke();
+    paintAt(v, vi);
+    endStroke();
+  }
+}
+
+function pushUndo(name) {
+  S.undo.push({ name, mask: S.drawn.get(name).mask.slice() });
+  if (S.undo.length > 60) S.undo.shift();
+}
+function undo() {
+  const u = S.undo.pop();
+  if (!u) { status("Nothing to undo"); return; }
+  const l = S.drawn.get(u.name);
+  if (!l) return;
+  l.mask = u.mask; l.dirty = true;
+  renderDrawn();
+  status(`Undid last edit on ${u.name}`);
+}
+// Replace the active label's mask (one undo step) and report the change.
+function setMask(mask, what) {
+  const l = S.drawn.get(S.active);
+  let before = 0, after = 0;
+  for (let i = 0; i < S.n; i++) { before += l.mask[i]; after += mask[i]; }
+  if (before === after && l.mask.every((x, i) => x === mask[i])) { status(`${what}: nothing changed`); return; }
+  pushUndo(S.active);
+  l.mask = mask; l.dirty = true;
+  renderDrawn();
+  status(`${what}: ${S.active} ${before.toLocaleString()} → ${after.toLocaleString()} vertices`);
+}
+
+let strokeOpen = false;
+function beginStroke() { if (S.active) { pushUndo(S.active); strokeOpen = true; } }
+function endStroke() {
+  if (!strokeOpen) return;
+  strokeOpen = false;
+  S.drawn.get(S.active).dirty = true;
+  renderDrawn();
+}
+function paintAt(v, vi) {
+  if (vi < 0 || !S.active) return;
+  const l = S.drawn.get(S.active);
+  const val = S.tool === "erase" ? 0 : 1;
+  for (const w of M.brush(S.adj, S.coords[v.surf], vi, S.radius)) l.mask[w] = val;
+  view.requestColor();
+}
+
+const contourPath = (closed) => M.tracePath(S.adj, S.coords[S.pathSurface], S.contour.points, closed);
+
+function updateContour() {
+  const path = contourPath(false);
+  const pts = S.contour.points;
+  const colors = pts.map((_, k) => {
+    const cursorEnd = S.contour.cursor === "tail" ? k === pts.length - 1 : k === 0;
+    return cursorEnd ? [1, 0.3, 0.3] : PATH_COLOR;
+  });
+  view.setPath(path, pts, colors, S.showHidden);
+  S.contour.path = path;
+  view.requestColor();
+  const n = pts.length;
+  if (n) status(`Path: ${n} point${n > 1 ? "s" : ""}, adding at ${S.contour.cursor}` +
+                (S.contour.awaitingSeed ? " — click inside the region" : ""));
+}
+
+function closeContour() {
+  if (S.contour.points.length < 3) { status("A closed path needs at least 3 points", true); return; }
+  if (!ensureActive()) return;
+  if (S.seedFill) {
+    S.contour.awaitingSeed = contourPath(true);
+    status("Click a vertex inside the path to fill that side");
+    return;
+  }
+  commitContour(-1);
+}
+
+function applyFill(fill, what) {
+  const l = S.drawn.get(S.active);
+  const add = S.drawMode === "add";
+  const mask = l.mask.slice();
+  for (let i = 0; i < S.n; i++) if (fill[i]) mask[i] = add ? 1 : 0;
+  setMask(mask, `${what} (${add ? "add" : "remove"})`);
+}
+
+function commitContour(seed) {
+  const loop = S.contour.awaitingSeed || contourPath(true);
+  applyFill(M.fillLoop(S.adj, loop, seed), "Closed path");
+  clearContour();
+}
+
+function clearContour() {
+  S.contour = { points: [], cursor: "tail", awaitingSeed: null, path: [] };
+  updateContour();
+}
+
+// The heatmap / curvature conditions as a 0/1 mask (null when neither is on).
+function valueMask() {
+  const heat = $("c-heat").checked, curv = $("c-curv").value;
+  if (!heat && curv === "any") return null;
+  if (heat && !S.heat) throw new Error("pick a map in Navigate › 1 · Heatmap first (or untick “inside the thresholded map”)");
+  if (curv !== "any" && !S.curv) throw new Error("this subject has no curvature file");
+  const ok = new Uint8Array(S.n).fill(1);
+  const thr = currentThreshold();
+  for (let i = 0; i < S.n; i++) {
+    if (heat && !(S.heat.values[i] > thr)) ok[i] = 0;
+    else if (curv === "sulci" && !(S.curv[i] > 0)) ok[i] = 0;
+    else if (curv === "gyri" && !(S.curv[i] < 0)) ok[i] = 0;
+  }
+  return ok;
+}
+
+// Every shown layer label containing `seed`, and the seed's region of every
+// shown annot, as one 0/1 mask (null when the seed is in none of them).
+function regionAt(seed) {
+  const ok = new Uint8Array(S.n);
+  let found = false;
+  for (const it of S.items.values()) {
+    if (!it.on || it.hidden) continue;
+    if (it.type === "label" && it.mask[seed]) {
+      for (const i of it.verts) ok[i] = 1;
+      found = true;
+    } else if (it.type === "annot") {
+      const k = it.labels[seed];
+      if (k < 0 || !it.regions[k]) continue;
+      for (let i = 0; i < S.n; i++) if (it.labels[i] === k) ok[i] = 1;
+      found = true;
+    }
+  }
+  return found ? ok : null;
+}
+
+// FreeView's custom fill: flood from the clicked vertex, bounded by the ticked
+// conditions, then add it to (or remove it from) the active label.
+function seedFill(seed) {
+  let allowed;
+  try { allowed = valueMask() || new Uint8Array(S.n).fill(1); }
+  catch (e) { status(`Fill: ${e.message}`, true); return; }
+  if ($("c-inside").checked) {
+    const region = regionAt(seed);
+    if (!region) { status("Fill: the click is not inside a shown layer label or annot region", true); return; }
+    for (let i = 0; i < S.n; i++) allowed[i] &= region[i];
+  }
+  if ($("c-others").checked) {
+    for (const [name, l] of S.drawn) {
+      if (name === S.active) continue;
+      for (let i = 0; i < S.n; i++) if (l.mask[i]) allowed[i] = 0;
+    }
+  }
+  let barrier = null;
+  if ($("c-path").checked && S.contour.points.length >= 2) {
+    barrier = new Uint8Array(S.n);
+    for (const i of contourPath(S.contour.points.length >= 3)) barrier[i] = 1;
+  }
+  if (!allowed[seed]) { status("Fill: the clicked vertex fails the conditions", true); return; }
+  if (barrier?.[seed]) { status("Fill: click beside the path, not on it", true); return; }
+  const fill = D.floodFill(S.adj, seed, allowed, barrier);
+  let count = 0;
+  for (let i = 0; i < S.n; i++) count += fill[i];
+  if (count > S.n * 0.25 &&
+      !confirm(`This fill covers ${count.toLocaleString()} vertices (${Math.round((100 * count) / S.n)}% ` +
+               "of the hemisphere) — nothing bounds it. Apply anyway?")) {
+    status("Fill cancelled");
+    return;
+  }
+  applyFill(fill, `Fill from vertex ${seed}`);
+}
+
+// ---------------------------------------------------------------- drawn labels
+function addLabel(name) {
+  name = name.trim();
+  if (!NAME_RE.test(name)) { status("Label names: letters, digits and . _ + - only", true); return; }
+  if (!S.drawn.has(name)) S.drawn.set(name, { mask: new Uint8Array(S.n), visible: true, dirty: false });
+  setActive(name);
+}
+
+// Drawing needs a label to draw into. Without one, start one: the name typed in
+// the box, else the first word-ROI name not drawn yet (else roi1, roi2, ...).
+function ensureActive() {
+  if (S.active) return true;
+  const typed = $("new-name").value.trim();
+  let name = typed;
+  if (!name) {
+    name = S.session.roi_names.find((n) => !S.drawn.has(n));
+    for (let k = 1; !name; k++) if (!S.drawn.has(`roi${k}`)) name = `roi${k}`;
+  }
+  if (!NAME_RE.test(name)) { status("Label names: letters, digits and . _ + - only", true); return false; }
+  addLabel(name);
+  $("new-name").value = "";
+  status(`Drawing into ${name}${typed ? "" : " — add or click another label in Drawn labels to switch"}`);
+  return true;
+}
+
+function setActive(name) {
+  S.active = name;
+  renderDrawn();
+}
+
+function renderDrawn() {
+  const ul = $("drawn");
+  ul.innerHTML = "";
+  if (!S.drawn.size) ul.innerHTML = `<li class="empty">no labels yet — add one above, or just start drawing</li>`;
+  $("drawing-into").textContent = S.active ? `Drawing into: ${S.active}` : "Drawing into: (new label on first click)";
+  for (const [name, l] of S.drawn) {
+    let count = 0;
+    for (let i = 0; i < S.n; i++) count += l.mask[i];
+    const li = document.createElement("li");
+    li.className = name === S.active ? "active" : "";
+    li.innerHTML = `<input type="checkbox" ${l.visible ? "checked" : ""} title="show">
+      <input type="color" value="${rgbHex(colorFor("drawn", name))}">
+      <span class="name" title="click to draw into this label">${esc(name)}${l.dirty ? ' <span class="dirty">●</span>' : ""}</span>
+      <span class="count">${count.toLocaleString()}</span>
+      <button title="remove from this session (a saved file is kept)">×</button>`;
+    const [vis, col] = li.querySelectorAll("input");
+    vis.onchange = () => { l.visible = vis.checked; view.requestColor(); };
+    col.oninput = () => { S.colors[key("drawn", name)] = hexRgb(col.value); view.requestColor(); };
+    li.querySelector(".name").onclick = () => setActive(name);
+    li.querySelector("button").onclick = () => {
+      if (l.dirty && !confirm(`Discard unsaved changes to ${name}?`)) return;
+      S.drawn.delete(name);
+      if (S.active === name) S.active = S.drawn.keys().next().value || null;
+      renderDrawn();
+    };
+    ul.appendChild(li);
+  }
+  view.requestColor();
+}
+
+// (Re)load the save folder's labels for this subject; they become editable.
+async function loadDrawn() {
+  const d = await getJSON(`${S.sub}/${S.hemi}/drawn?${q({ folder: S.drawFolder })}`);
+  const keep = S.active;
+  S.drawn = new Map();
+  S.undo = [];
+  for (const [name, verts] of Object.entries(d.labels)) {
+    const mask = new Uint8Array(S.n);
+    for (const i of verts) if (i >= 0 && i < S.n) mask[i] = 1;
+    S.drawn.set(name, { mask, visible: true, dirty: false });
+  }
+  S.drawDir = d.dir;
+  S.active = S.drawn.has(keep) ? keep : S.drawn.keys().next().value || null;
+  $("draw-out").textContent = `Saves to ${d.dir}/${S.hemi}.<name>.label` +
+    (d.exists ? "" : " (folder is created on the first save)") + " — overwrites a file of the same name.";
+  renderDrawn();
+}
+
+async function saveDrawn(names) {
+  const done = [], empty = [];
+  try {
+    for (const name of names) {
+      const l = S.drawn.get(name);
+      const vertices = [];
+      for (let i = 0; i < S.n; i++) if (l.mask[i]) vertices.push(i);
+      if (!vertices.length) { empty.push(name); continue; }
+      const r = await api(`${S.sub}/${S.hemi}/drawn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder: S.drawFolder, name, vertices }),
+      });
+      done.push(await r.json());
+      l.dirty = false;
+    }
+  } catch (e) { status(`Save failed — ${e.message}`, true); renderDrawn(); return; }
+  renderDrawn();
+  const skip = empty.length ? ` (skipped empty: ${empty.join(", ")})` : "";
+  status(done.length === 1 ? `Saved ${done[0].n_vertices} vertices → ${done[0].path}${skip}`
+                           : `Saved ${done.length} labels to ${S.drawDir}${skip}`, !done.length);
+  if (done.length) await afterSave(names);
+}
+
+// A save may have created the folder or changed files panel 4 is showing:
+// re-list, and reload the ticked manual labels that were just overwritten.
+async function afterSave(names) {
+  try { S.meta = await fetchMeta(); } catch { return; }
+  renderManualFolders();
+  if (S.meta.layers.manual.dir === S.drawDir) {
+    const again = names.filter((n) => isOn("manual", n));
+    for (const n of again) S.items.delete(key("manual", n));
+    if (again.length) await setOn("manual", again, true);
+  }
+  renderLayer("manual");
 }
 
 // ---------------------------------------------------------------- heatmap
@@ -158,15 +520,46 @@ async function setHeatmap(name) {
 // *_mean_raw map at ~20, so one fixed range would be useless for the other.
 function syncThresholdWidgets() {
   const on = !!S.heat;
-  for (const id of ["thr", "thr-n", "heat-alpha"]) $(id).disabled = !on;
+  for (const id of ["thr", "thr-n", "heat-alpha", "heat-tt", "heat-outline"]) $(id).disabled = !on;
+  for (const id of ["c-thr-r", "c-thr-n"]) $(id).disabled = !on;
+  $("c-map").textContent = on ? S.heat.name : "none — pick one in Navigate › 1 · Heatmap";
   $("colorbar").style.visibility = on ? "" : "hidden";
   if (!on) return;
   const thr = currentThreshold();
   const step = Math.max(S.heat.max / 200, 1e-4);
   Object.assign($("thr"), { min: 0, max: S.heat.max, step, value: thr });
   Object.assign($("thr-n"), { min: 0, max: S.heat.max, step, value: +thr.toPrecision(4) });
-  $("cb-lo").textContent = `${+thr.toPrecision(3)}`;
-  $("cb-hi").textContent = `${+S.heat.max.toPrecision(3)}`;
+  syncColorbar(thr);
+  // The fill condition's own slider is a second handle on the same threshold.
+  $("c-map").textContent = S.heat.name;
+  Object.assign($("c-thr-r"), { min: 0, max: S.heat.max, step, value: thr });
+  Object.assign($("c-thr-n"), { min: 0, max: S.heat.max, step, value: +thr.toPrecision(4) });
+}
+
+// Hard threshold: the bar is thr -> max. Transparent: 0 -> max, faded below the
+// threshold the way the surface is, with a tick at the threshold.
+function syncColorbar(thr) {
+  const max = S.heat.max, fmt = (x) => `${+x.toPrecision(3)}`;
+  const bar = document.querySelector("#colorbar .bar");
+  $("tt-hint").hidden = !S.heatTT;
+  if (!S.heatTT) {
+    bar.style.background = "";
+    $("cb-mark").hidden = true;
+    $("cb-lo").textContent = fmt(thr); $("cb-mid").textContent = ""; $("cb-hi").textContent = fmt(max);
+    return;
+  }
+  const stops = [];
+  for (let k = 0; k <= 40; k++) {
+    const v = (k / 40) * max;
+    const a = v > thr ? 1 : (v / (thr || 1)) ** 2;
+    const [r, g, b] = heatColor(k / 40).map(Math.round);
+    stops.push(`rgba(${r},${g},${b},${a.toFixed(3)}) ${(k * 2.5).toFixed(1)}%`);
+  }
+  bar.style.background = `linear-gradient(90deg, ${stops.join(", ")}), #9a9a9a`;
+  const mark = $("cb-mark");
+  mark.hidden = false;
+  mark.style.left = `${(100 * thr) / max}%`;
+  $("cb-lo").textContent = "0"; $("cb-mid").textContent = `thr ${fmt(thr)}`; $("cb-hi").textContent = fmt(max);
 }
 
 function setThreshold(t) {
@@ -419,6 +812,11 @@ async function refreshLayer(kind) {
 async function loadSubject() {
   const sub = $("sub").value, hemi = $("hemi").value;
   if (!sub) return;
+  if (isDirty() && !confirm("Unsaved drawn labels will be discarded. Load anyway?")) {
+    // Put the pickers back on what is actually shown.
+    if (S.meta) { $("sub").value = S.sub; $("hemi").value = S.hemi; }
+    return;
+  }
   // Switching subject keeps everything that isn't the subject's own data: the
   // camera (mirrored on a hemisphere switch), surface opacity / mesh, the
   // heatmap and its threshold, ticked labels with their fill and legend state,
@@ -441,11 +839,18 @@ async function loadSubject() {
     const surfaces = await Promise.all(meta.surfaces.map(async (s) =>
       [s, await getBin(`${sub}/${hemi}/surface/${s}`, Float32Array)]));
     S.curv = meta.has_curv ? await getBin(`${sub}/${hemi}/curv`, Float32Array) : null;
-    Object.assign(S, { meta, n: meta.n_vertices, heat: null, items: new Map(), highlight: null });
+    Object.assign(S, { meta, n: meta.n_vertices, heat: null, items: new Map(), highlight: null,
+                       coords: Object.fromEntries(surfaces), drawn: new Map() });
+    S.contour = { points: [], cursor: "tail", awaitingSeed: null, path: [] };
     renderLegend();
     S.adj = M.buildAdjacency(faces, S.n);
     view.load(surfaces, faces, S.n);
     view.surfaceControls($("surf-toggles"));
+    if (!meta.surfaces.includes(S.pathSurface)) {
+      S.pathSurface = meta.surfaces.includes("inflated") ? "inflated" : meta.surfaces[0];
+    }
+    $("path-surface").innerHTML = meta.surfaces.map((s) => `<option>${s}</option>`).join("");
+    $("path-surface").value = S.pathSurface;
     if (keepView) view.setViewState(keepView, mirror);
     else view.setView("ventral", hemi);
     renderHeatmaps();
@@ -474,6 +879,7 @@ async function loadSubject() {
       renderLayer(kind);
     }
     renderLegend();
+    await loadDrawn();
     view.requestColor();
     status(`${sub} ${hemi}: ${S.n.toLocaleString()} vertices`);
     $("hover").textContent = "";
@@ -484,7 +890,107 @@ async function loadSubject() {
 }
 
 // ---------------------------------------------------------------- UI wiring
+function setTool(t) {
+  S.tool = t;
+  for (const b of $("tools").children) b.classList.toggle("on", b.dataset.tool === t);
+  document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim();
+  document.body.classList.add(`tool-${t}`);
+  $("viewers").className = t;
+}
+function setSeg(id, attr, val) {
+  for (const b of $(id).children) b.classList.toggle("on", b.dataset[attr] === val);
+}
+function setClickMode(m) {
+  S.clickMode = m;
+  setSeg("click-mode", "click", m);
+}
+function setRadius(r) {
+  S.radius = Math.min(10, Math.max(0.5, r));
+  $("radius").value = S.radius;
+  $("radius-out").textContent = `${S.radius} mm`;
+}
+
+function wireDrawing() {
+  $("tools").onclick = (e) => e.target.dataset.tool && setTool(e.target.dataset.tool);
+  $("draw-mode").onclick = (e) => {
+    if (!e.target.dataset.mode) return;
+    S.drawMode = e.target.dataset.mode;
+    setSeg("draw-mode", "mode", S.drawMode);
+  };
+  $("click-mode").onclick = (e) => e.target.dataset.click && setClickMode(e.target.dataset.click);
+  $("path-surface").onchange = (e) => { S.pathSurface = e.target.value; updateContour(); };
+  $("seed-fill").onchange = (e) => { S.seedFill = e.target.checked; };
+  $("show-hidden").onchange = (e) => { S.showHidden = e.target.checked; updateContour(); };
+  $("radius").oninput = (e) => setRadius(+e.target.value);
+  $("draw-alpha").oninput = (e) => { S.drawAlpha = +e.target.value; view.requestColor(); };
+  $("trim").onclick = () => {
+    if (!S.active) { status("Add or pick a label first", true); return; }
+    let ok;
+    try { ok = valueMask(); } catch (e) { status(`Trim: ${e.message}`, true); return; }
+    if (!ok) { status("Trim: tick “inside the thresholded map” or pick sulci/gyri first", true); return; }
+    setMask(S.drawn.get(S.active).mask.map((x, i) => x & ok[i]), "Trim");
+  };
+  const folder = $("draw-folder");
+  folder.onkeydown = (e) => { if (e.key === "Enter") folder.blur(); };
+  folder.onchange = async () => {
+    const f = folder.value.trim();
+    if (!NAME_RE.test(f)) { status("Folder name: letters, digits and . _ + - only", true); folder.value = S.drawFolder; return; }
+    if (f === S.drawFolder) return;
+    if (isDirty() && !confirm("Unsaved drawn labels will be discarded. Switch folder anyway?")) {
+      folder.value = S.drawFolder; return;
+    }
+    S.drawFolder = f;
+    try { await loadDrawn(); } catch (e) { status(`Could not read the folder — ${e.message}`, true); }
+  };
+  $("new-label").onclick = () => { addLabel($("new-name").value); $("new-name").value = ""; };
+  $("new-name").onkeydown = (e) => { if (e.key === "Enter") $("new-label").click(); };
+  $("save").onclick = () => S.active && saveDrawn([S.active]);
+  $("save-all").onclick = () => saveDrawn([...S.drawn.keys()]);
+  const op = (what, fn) => () => {
+    if (!S.active) { status("Add or pick a label first", true); return; }
+    setMask(fn(S.drawn.get(S.active).mask), what);
+  };
+  $("fill-holes").onclick = op("Fill holes", (m) => M.fillHoles(S.adj, m));
+  $("dilate").onclick = op("Dilate", (m) => D.dilate(S.adj, m));
+  $("erode").onclick = op("Erode", (m) => D.erode(S.adj, m));
+  $("clear").onclick = () => {
+    if (S.active && confirm(`Clear every vertex of ${S.active}?`)) setMask(new Uint8Array(S.n), "Clear");
+  };
+
+  window.addEventListener("keydown", (e) => {
+    if (e.target instanceof Element && e.target.matches("input, select, textarea")) return;
+    const k = e.key;
+    if ((e.metaKey || e.ctrlKey) && k.toLowerCase() === "z") { e.preventDefault(); undo(); return; }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = { n: "navigate", c: "contour", b: "brush", e: "erase" }[k.toLowerCase()];
+    if (t) { setTool(t); return; }
+    if (isPaintTool() && (k === "[" || k === "]")) { setRadius(S.radius + (k === "]" ? 0.5 : -0.5)); return; }
+    if (S.tool !== "contour") return;
+    if (k === "Tab") {
+      e.preventDefault();
+      S.contour.cursor = S.contour.cursor === "tail" ? "head" : "tail";
+      updateContour();
+    } else if (k === "Backspace" || k === "Delete") {
+      e.preventDefault();
+      if (S.contour.awaitingSeed) { S.contour.awaitingSeed = null; updateContour(); return; }
+      if (S.contour.cursor === "tail") S.contour.points.pop(); else S.contour.points.shift();
+      updateContour();
+    } else if (k === "Enter") {
+      closeContour();
+    } else if (k === "Escape") {
+      clearContour(); status("Path discarded");
+    } else if (k.toLowerCase() === "f") {
+      setClickMode(S.clickMode === "path" ? "fill" : "path");
+    }
+  });
+  window.addEventListener("beforeunload", (e) => { if (isDirty()) e.preventDefault(); });
+  setTool("navigate");
+  setSeg("draw-mode", "mode", S.drawMode);
+  setClickMode(S.clickMode);
+}
+
 function wire() {
+  wireDrawing();
   // Picking a subject or hemisphere loads it straight away.
   $("load").onclick = loadSubject;
   $("sub").onchange = loadSubject;
@@ -506,7 +1012,11 @@ function wire() {
   $("heat").onchange = (e) => setHeatmap(e.target.value);
   $("thr").oninput = (e) => setThreshold(e.target.value);
   $("thr-n").onchange = (e) => setThreshold(e.target.value);
+  $("c-thr-r").oninput = (e) => setThreshold(e.target.value);
+  $("c-thr-n").onchange = (e) => setThreshold(e.target.value);
   $("heat-alpha").oninput = (e) => { S.heatAlpha = +e.target.value; view.requestColor(); };
+  $("heat-tt").onchange = (e) => { S.heatTT = e.target.checked; syncThresholdWidgets(); view.requestColor(); };
+  $("heat-outline").onchange = (e) => { S.heatOutline = e.target.checked; view.requestColor(); };
   $("cluster-fill").onchange = (e) => { S.clusterFill = e.target.checked; view.requestColor(); };
   $("fill-alpha").oninput = (e) => { S.fillAlpha = +e.target.value; view.requestColor(); };
   for (const el of document.querySelectorAll(".dir")) {
@@ -561,6 +1071,9 @@ async function init() {
   try {
     S.session = await getJSON("session");
     S.templates = { ...S.session.templates };
+    S.drawFolder = S.session.draw_folder;
+    $("draw-folder").value = S.drawFolder;
+    $("roi-names").innerHTML = S.session.roi_names.map((n) => `<option value="${esc(n)}">`).join("");
     for (const el of document.querySelectorAll(".dir")) el.value = S.templates[el.dataset.kind];
     $("sub").innerHTML = S.session.subjects.map((s) => `<option>${s}</option>`).join("");
     if (S.session.default_subject) $("sub").value = S.session.default_subject;
@@ -572,4 +1085,25 @@ async function init() {
     await loadSubject();
   } catch (e) { status(`Could not reach the server — ${e.message}`, true); }
 }
+
+// ---------------------------------------------------------------- sidebar
+// Hide / show with the header button or "\\". Remembered per browser; narrow
+// windows start hidden. The panels resize themselves (ResizeObserver).
+const SIDEBAR_KEY = "delineationHelper.sidebar";
+function setSidebar(show) {
+  document.body.classList.toggle("no-sidebar", !show);
+  $("sidebar-toggle").title = show ? "hide the sidebar (\\)" : "show the sidebar (\\)";
+  try { localStorage.setItem(SIDEBAR_KEY, show ? "1" : "0"); } catch {}
+}
+{
+  let saved = null;
+  try { saved = localStorage.getItem(SIDEBAR_KEY); } catch {}
+  setSidebar(saved === null ? window.innerWidth > 900 : saved === "1");
+  $("sidebar-toggle").onclick = () => setSidebar(document.body.classList.contains("no-sidebar"));
+  window.addEventListener("keydown", (e) => {
+    if (e.target instanceof Element && e.target.matches("input, select, textarea")) return;
+    if (e.key === "\\" && !e.metaKey && !e.ctrlKey) setSidebar(document.body.classList.contains("no-sidebar"));
+  });
+}
+
 init();

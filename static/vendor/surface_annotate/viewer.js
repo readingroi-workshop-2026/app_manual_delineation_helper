@@ -51,6 +51,11 @@ const VIEWS = {
 };
 export const VIEW_NAMES = Object.keys(VIEWS);
 
+// Field of view of the panel's SHORTER side. Wide panels keep it vertically,
+// narrow ones horizontally, so the brain keeps its size relative to the panel
+// whichever way the window is resized (or the sidebar hidden).
+const SHORT_SIDE_FOV = 30;
+
 export class SurfaceViewer {
   // container: element the viewer panels go into.
   // hooks (all optional):
@@ -107,7 +112,7 @@ export class SurfaceViewer {
     renderer.setClearColor(0x0f1115);
     el.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 1, 5000);
+    const camera = new THREE.PerspectiveCamera(SHORT_SIDE_FOV, 1, 1, 5000);
     // A key light above-left of the camera plus a weak headlight: gyral crowns
     // catch the light, sulcal walls fall into shade, so depth reads naturally.
     const key = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -189,6 +194,14 @@ export class SurfaceViewer {
   resize(v) {
     const w = v.el.clientWidth, h = v.el.clientHeight;
     if (!w || !h) return;
+    // Browser zoom changes devicePixelRatio; follow it so the canvas stays sharp.
+    if (v.renderer.getPixelRatio() !== window.devicePixelRatio) {
+      v.renderer.setPixelRatio(window.devicePixelRatio);
+    }
+    const aspect = w / h;
+    const half = THREE.MathUtils.degToRad(SHORT_SIDE_FOV / 2);
+    v.camera.fov = aspect >= 1 ? SHORT_SIDE_FOV
+      : THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(half) / aspect));
     v.renderer.setSize(w, h, false);
     v.pathLine.material.resolution.set(w, h);
     v.pathHidden.material.resolution.set(w, h);

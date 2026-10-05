@@ -96,7 +96,7 @@ view is never reset.
 
 | Panel | Controls | Typical content |
 |-------|----------|-----------------|
-| **1 · Heatmap** | which map, threshold (slider + exact box, bounded by the map's own range), opacity, colour bar | `*.func.gii` score / mean maps |
+| **1 · Heatmap** | which map, threshold (slider + exact box, bounded by the map's own range), opacity, transparent threshold + outline, colour bar | `*.func.gii` score / mean maps |
 | **2 · Auto clusters** | tick a whole **contrast**, or **▸** to tick single clusters; one **fill** switch | `*_Cluster_*.label` |
 | **3 · Atlas labels** | each label: tick, colour, fill. Each annot: tick, fill, **▸** to pick regions | aparc **OTS**, Wang **hV4**/**hMT**, **FG1–4**, `aparc.a2009s` |
 | **4 · Manual labels** | pick a **rater folder** (`tiger_delineation/`, `anat_label_tiger/`, …) or type a path; then as panel 3 | labels you or a colleague drew |
@@ -118,6 +118,24 @@ freesurfer-with_t2/<sub>/label/anat_label_tiger/lh.fusiform-gyrus.label
 Every folder there is offered in the panel's folder list. To use a folder
 elsewhere, type its path in the box (`{sub}` = subject, Enter to apply). Only
 the selected hemisphere's files show up.
+
+### Transparent thresholding
+
+By default the heatmap is shown with **transparent thresholding**
+(Taylor, Aggarwal & Bandettini, 2026): the whole map is coloured by value,
+vertices above the threshold are opaque and **outlined** (dark, so small blobs keep their colour), and those
+below it are not hidden but fade out quadratically (opacity `(v / thr)²`). A
+cluster is then seen in its context — whether it sits on a broad
+subthreshold ridge or stands alone, and whether the cut-off splits one blob in
+two. Untick **transparent threshold** for the classic hard cut (only
+`v > thr`, coloured from the threshold up); **outline suprathreshold** works in
+both modes. The threshold still means the same thing everywhere else — the
+Contour tab's "inside the thresholded map" fill uses the binary `v > thr`.
+
+> Taylor PA, Aggarwal H, Bandettini PA (2026). Go figure: transparency in
+> neuroscience images preserves context and clarifies interpretation.
+> *Nature Methods*. [doi:10.1038/s41592-026-03206-7](https://doi.org/10.1038/s41592-026-03206-7)
+> (preprint: [arXiv:2504.07824](https://arxiv.org/abs/2504.07824))
 
 ### The legend: toggling single clusters
 
@@ -149,6 +167,65 @@ data — surfaces, heatmap values, clusters, labels. Everything else stays:
 - every **contrast you had fully ticked** in panel 2 — ticked again with the
   new subject's own clusters. Single clusters are not carried over, because
   cluster IDs are numbered per subject.
+
+### Drawing labels (Contour · Brush · Erase)
+
+The tabs at the top of the sidebar pick the tool. **Navigate** is the viewer
+described above. The other three draw into a label of your own, on top of
+every layer you have ticked — the heatmap panel stays in view, so you can
+draw against the map and its threshold.
+
+Under **Drawn labels**, set the save folder (`label/<folder>`, default
+`draw_label_dir` in `config.yaml`) and add a label — the six word-ROI names
+(`LOC-words`, `IOG-words`, `PON-words`, `pOTS-words`, `mOTS-words`,
+`mFus-words`) are suggested, so every rater saves the same names. Click a
+label's name to draw into it. Labels already in that folder load for editing.
+
+| Tab | What a click does |
+|-----|-------------------|
+| **Contour** | *adds path point*: points are joined by shortest paths along the mesh; <kbd>Enter</kbd> closes the path and fills it. *fills from seed* (<kbd>F</kbd> switches): floods out from the clicked vertex, FreeView's "custom fill" |
+| **Brush** / **Erase** | paints / erases a disc (radius slider, <kbd>[</kbd> <kbd>]</kbd>); hold <kbd>Shift</kbd> and drag to paint a stroke |
+
+**Fills** *add* to or *remove* from the active label (closed paths and seeded
+fills alike). A seeded fill stays:
+
+- **up to and including the path** — a drawn path (open or closed) is a wall;
+- **inside the thresholded map** — whichever map is picked in panel 1, made
+  binary at its threshold (also adjustable right there), so a click on a blob
+  takes the connected suprathreshold patch;
+- on **sulci only** (curv > 0) or **gyri only** (curv < 0);
+- **inside the clicked layer label / region** — a ticked cluster, atlas or
+  manual label, or the clicked annot region (click inside cluster #3 to take
+  exactly cluster #3);
+- **out of other drawn labels**, so neighbouring ROIs don't overlap.
+
+A fill that nothing bounds and that would cover a quarter of the hemisphere
+asks first. **Trim label to map / curvature** removes the active label's
+vertices outside the thresholded map or off the chosen curvature. **Fill holes**, **Dilate**,
+**Erode** and **Clear** act on the active label; <kbd>Ctrl/⌘ Z</kbd> undoes.
+
+**Save active** / **Save all** write
+`<fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label` (xyz from `<hemi>.white`),
+overwriting a file of the same name; empty labels are not saved. The folder
+then shows up in panel 4's folder list. Switching subject, hemisphere or
+folder with unsaved changes asks first.
+
+### Combining the ROIs into an annot
+
+`scripts/make_annot.py` turns a folder of ROI labels into one FreeSurfer
+annotation per hemisphere, in the same folder (needs FreeSurfer's
+`mris_label2annot` on `PATH`):
+
+```bash
+uv run scripts/make_annot.py --folder manual_delineation              # every subject that has it
+uv run scripts/make_annot.py --folder tiger_delineation --annot-name tiger_6ROIs --sub 02 --hemi lh
+# -> <fs_dir>/sub-02/label/tiger_delineation/lh.tiger_6ROIs.annot (+ lh.tiger_6ROIs.ctab)
+```
+
+The colours come from `WORD_ROIS` in `utils/discovery.py` (`--ctab` takes
+your own `index name R G B A` table). A missing or empty label is skipped with
+a warning, without shifting the other ROIs' names or colours, and vertices
+claimed by two ROIs are reported.
 
 ### Generating manual labels from the sheet
 
@@ -195,6 +272,11 @@ writes nothing and is reported; the other sheets still run.
 
 ### Rotating and viewing
 
+- **☰** (top left) or the `\` key hides the sidebar, to give the panels the
+  whole window on a small screen; the browser remembers your choice, and
+  windows narrower than 900 px start with it hidden. The panels follow the
+  window size (and browser zoom), and the brain keeps its size relative to the
+  panel's shorter side, so it never gets cropped in a narrow panel.
 - **Drag** rotates (free trackball), **right-drag** pans, the **wheel** zooms.
   The two panels are **linked**: moving either one moves both. Untick
   **link cameras** to move them separately.
@@ -489,13 +571,15 @@ start it with another config: `uv run app.py --config my_config.yaml`.
 
 ```
 app.py                 server (FastAPI) + CLI: serves the page and the files it asks for
-static/index.html      the page: layer panels + view controls
-static/app.js          layer logic (heatmap, clusters, atlas, manual) on top of the engine
+static/index.html      the page: tool tabs, layer panels, drawing panels, view controls
+static/app.js          layer logic (heatmap, clusters, atlas, manual) + drawing, on top of the engine
+static/draw.js         DOM-free seeded fill / dilate / erode (node --test tests/draw.test.mjs)
 static/style.css       page style
 static/vendor/surface_annotate/  vendored viewer engine (viewer.js, mesh.js); see its README
 utils/config.py        config loading + sub/hemi naming + resolve_dir (path templates)
 utils/surface.py       read surface geometry (inflated & pial) and curvature
-utils/labels.py        readers for .label and .func.gii files
+utils/labels.py        .label / .func.gii readers, .label writer
+scripts/make_annot.py  combine a folder's ROI labels into a .annot
 utils/discovery.py     scan one layer directory -> {display_name: path} (+ palette)
 tests/test_app.py      API tests on a synthetic subject (uv run pytest)
 config.yaml            data_dir + fs_dir + one directory per layer (all editable in-app)

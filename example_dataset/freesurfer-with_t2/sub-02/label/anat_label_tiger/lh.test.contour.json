@@ -1,0 +1,14 @@
+{
+ "sub": "sub-02",
+ "hemi": "lh",
+ "name": "test",
+ "rater": "tiger",
+ "n_vertices": 224,
+ "saved": "2026-10-01T17:12:01",
+ "color": [
+  170,
+  110,
+  40
+ ],
+ "contours": []
+}

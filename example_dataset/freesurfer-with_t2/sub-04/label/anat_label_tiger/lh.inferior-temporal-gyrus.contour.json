@@ -1,0 +1,14 @@
+{
+ "sub": "sub-04",
+ "hemi": "lh",
+ "name": "inferior-temporal-gyrus",
+ "rater": "tiger",
+ "n_vertices": 2826,
+ "saved": "2026-10-01T14:26:05",
+ "color": [
+  60,
+  180,
+  75
+ ],
+ "contours": []
+}

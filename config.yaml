@@ -44,3 +44,8 @@ atlas_label_dir: freesurfer-with_t2/{sub}/label
 # Layer 4 — user-defined manual labels (lh.*.label)
 manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 
+
+# Labels drawn in the page (Contour / Brush / Erase tabs) are saved to
+# <fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label. This is the folder name
+# the page starts with; it is editable there. xyz are taken from <hemi>.white.
+draw_label_dir: manual_delineation

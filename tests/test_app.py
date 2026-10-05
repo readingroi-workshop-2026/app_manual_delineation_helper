@@ -169,3 +169,25 @@ def test_vendored_engine_matches_surface_annotate():
     for name in ("viewer.js", "mesh.js"):
         assert filecmp.cmp(upstream / name, REPO / "static" / "vendor" / "surface_annotate" / name,
                            shallow=False), f"{name} differs from surface-annotate; re-copy it"
+
+
+def test_drawn_labels_save_and_reload(dataset):
+    root, c = dataset
+    url = "/api/sub-01/lh/drawn"
+    assert c.get(url, params={"folder": "my_draw"}).json()["labels"] == {}
+    r = c.post(url, json={"folder": "my_draw", "name": "mFus-words", "vertices": [3, 1, 1, 7]})
+    assert r.status_code == 200 and r.json()["n_vertices"] == 3
+    path = root / "freesurfer-with_t2" / "sub-01" / "label" / "my_draw" / "lh.mFus-words.label"
+    assert path.read_text().splitlines()[1] == "3"
+    assert c.get(url, params={"folder": "my_draw"}).json()["labels"] == {"mFus-words": [1, 3, 7]}
+    # The new folder is offered as a panel-4 source.
+    assert "my_draw" in c.get("/api/sub-01/lh/meta").json()["label_folders"]
+
+
+def test_drawn_names_cannot_escape(dataset):
+    _, c = dataset
+    url = "/api/sub-01/lh/drawn"
+    for folder, name in (("..", "x"), ("a/b", "x"), ("ok", "../x"), ("ok", ".hidden")):
+        r = c.post(url, json={"folder": folder, "name": name, "vertices": [0]})
+        assert r.status_code == 400, (folder, name)
+    assert c.post(url, json={"folder": "ok", "name": "x", "vertices": [N]}).status_code == 400

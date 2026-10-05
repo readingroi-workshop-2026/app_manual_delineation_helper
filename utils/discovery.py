@@ -43,7 +43,20 @@ ROI_COLORS = {
     "pots": "#e6194b",  # red
     "pon": "#4363d8",   # blue
     "iog": "#911eb4",   # purple
+    "loc": "#00c8c8",   # cyan
 }
+
+# The word-ROIs the workshop delineates, posterior -> anterior, with the colour
+# each gets in a combined .annot (scripts/make_annot.py). The names are offered
+# when you add a label to draw, so saved files match what make_annot looks for.
+WORD_ROIS = [
+    ("LOC-words", (0, 200, 200)),    # cyan
+    ("IOG-words", (128, 0, 128)),    # purple
+    ("PON-words", (0, 0, 255)),      # blue
+    ("pOTS-words", (255, 0, 0)),     # red
+    ("mOTS-words", (0, 255, 0)),     # green
+    ("mFus-words", (255, 165, 0)),   # orange
+]
 
 
 def roi_color(name: str) -> str | None:
