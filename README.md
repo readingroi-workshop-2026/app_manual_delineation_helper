@@ -129,6 +129,13 @@ offset slightly so it never z-fights with the front surface. The grey surface st
 and buried parts are drawn flat (unlit), so you can tell them from the ones in front.
 *x-ray* (next to *mesh*) turns this off per surface. Clusters read best with **fill** on.
 
+### Deleting a saved label
+
+**Delete active** (next to *Save active*), or the 🗑 on a label's row, deletes that label's saved
+file from disk: `<subject>/label/<Save to folder>/<hemi>.<name>.label`, plus its `.contour.json`
+sidecar if there is one. It asks first and shows the exact path. **This cannot be undone.**
+The × on a row only removes the label from the page; its file stays.
+
 ### Where drawn labels go: one folder per delineation step
 
 *Save to* (Drawn labels) decides the folder, `<subject>/label/<folder>/`. The dropdown under it

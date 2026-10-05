@@ -38,9 +38,12 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   contrasts are re-ticked, never single cluster IDs.
 - Heatmap/cluster files are matched by BIDS `hemi-L/R`; atlas/manual labels by
   FreeSurfer `lh./rh.` prefix (`normalize_hemi` returns both).
-- **The only write endpoint is `POST /api/{sub}/{hemi}/drawn`**: folder and
-  label name must match `NAME_RE` (one path component, no leading dot), so it
-  can only write `<fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label`.
+- **The only write endpoints are `POST` and `DELETE /api/{sub}/{hemi}/drawn`**:
+  folder and label name must match `NAME_RE` (one path component, no leading
+  dot), so they can only write / delete `<fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label`
+  (delete also removes its `.contour.json` sidecar). The page's *Delete active*
+  button and each row's 🗑 call DELETE after a confirm showing the full path;
+  × only drops a label from the session.
 - **mris_label2annot maps the k-th `--l` to ctab index k.** `make_annot.py`
   writes the ctab from the labels actually passed, and uses `--no-unknown`
   with a 0-based ctab: without it unlabelled vertices are index 0 and nibabel
