@@ -14,7 +14,7 @@ Layers (each reads a directory from config.yaml, editable live in the page):
 
 Labels drawn in the page (Contour / Brush / Erase tabs) are saved to
 <fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label, the folder named in the page
-(default: draw_label_dir). Nothing else is ever written.
+(default: draw_label_dir). Deleting removes only such a saved label (and its sidecar). Nothing else is ever written.
 
 Run:  uv run app.py            (then open http://localhost:8501)
 """
@@ -327,6 +327,23 @@ def create_app(config: dict) -> FastAPI:
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
         return {"path": str(path), "n_vertices": n}
+
+    @app.delete("/api/{sub}/{hemi}/drawn")
+    def delete_drawn(sub: str, hemi: str, folder: str, name: str) -> dict:
+        """Delete one saved label of a save folder from disk: <hemi>.<name>.label and
+        its .contour.json sidecar, if any. Same folder / name rules as saving."""
+        sub, hemi_fs, _ = check(sub, hemi)
+        if not NAME_RE.match(name):
+            raise HTTPException(400, f"bad label name {name!r}: use letters, digits and . _ + -")
+        path = drawn_dir(sub, folder) / f"{hemi_fs}.{name}.label"
+        if not path.is_file():
+            raise HTTPException(404, f"no saved label {path.name} in {path.parent}")
+        removed = []
+        for p in (path, path.with_name(f"{hemi_fs}.{name}.contour.json")):
+            if p.is_file():
+                p.unlink()
+                removed.append(str(p))
+        return {"path": str(path), "removed": removed}
 
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     return app

@@ -186,6 +186,24 @@ def test_drawn_labels_save_and_reload(dataset):
     assert "my_draw" in c.get("/api/sub-01/lh/meta").json()["label_folders"]
 
 
+def test_drawn_label_delete(dataset):
+    """Delete removes the saved .label (and its .contour.json sidecar) of that folder only."""
+    root, c = dataset
+    url = "/api/sub-01/lh/drawn"
+    c.post(url, json={"folder": "my_draw", "name": "pOTS-words", "vertices": [2, 4]})
+    c.post(url, json={"folder": "other", "name": "pOTS-words", "vertices": [5]})
+    d = root / "freesurfer-with_t2" / "sub-01" / "label" / "my_draw"
+    (d / "lh.pOTS-words.contour.json").write_text("{}")
+    r = c.delete(url, params={"folder": "my_draw", "name": "pOTS-words"})
+    assert r.status_code == 200 and len(r.json()["removed"]) == 2
+    assert not (d / "lh.pOTS-words.label").exists() and not (d / "lh.pOTS-words.contour.json").exists()
+    assert c.get(url, params={"folder": "my_draw"}).json()["labels"] == {}
+    assert c.get(url, params={"folder": "other"}).json()["labels"] == {"pOTS-words": [5]}
+    assert c.delete(url, params={"folder": "my_draw", "name": "pOTS-words"}).status_code == 404
+    assert c.delete(url, params={"folder": "my_draw", "name": "../lh.white"}).status_code == 400
+    assert c.delete(url, params={"folder": "..", "name": "x"}).status_code == 400
+
+
 def test_drawn_names_cannot_escape(dataset):
     _, c = dataset
     url = "/api/sub-01/lh/drawn"

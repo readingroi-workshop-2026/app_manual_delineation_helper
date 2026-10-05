@@ -531,12 +531,14 @@ function renderDrawn() {
       <input type="color" value="${rgbHex(colorFor("drawn", name))}">
       <span class="name" title="click to draw into this label">${esc(name)}${l.dirty ? ' <span class="dirty">●</span>' : ""}</span>
       <span class="count">${count.toLocaleString()}</span>
-      <button title="remove from this session (a saved file is kept)">×</button>`;
+      <button class="del" title="delete the saved file from disk (asks first)">🗑</button>
+      <button class="rm" title="remove from this session (a saved file is kept)">×</button>`;
     const [vis, col] = li.querySelectorAll("input");
     vis.onchange = () => { l.visible = vis.checked; view.requestColor(); };
     col.oninput = () => { S.colors[key("drawn", name)] = hexRgb(col.value); view.requestColor(); };
     li.querySelector(".name").onclick = () => setActive(name);
-    li.querySelector("button").onclick = () => {
+    li.querySelector(".del").onclick = () => deleteDrawn(name);
+    li.querySelector(".rm").onclick = () => {
       if (l.dirty && !confirm(`Discard unsaved changes to ${name}?`)) return;
       S.drawn.delete(name);
       if (S.active === name) S.active = S.drawn.keys().next().value || null;
@@ -587,6 +589,34 @@ async function saveDrawn(names) {
   status(done.length === 1 ? `Saved ${done[0].n_vertices} vertices → ${done[0].path}${skip}`
                            : `Saved ${done.length} labels to ${S.drawDir}${skip}`, !done.length);
   if (done.length) await afterSave(names);
+}
+
+// Delete a label's saved file from disk (after asking), and drop it from the session.
+async function deleteDrawn(name) {
+  if (!name) { status("Pick a label first", true); return; }
+  const file = `${S.drawDir}/${S.hemi}.${name}.label`;
+  if (!confirm(`Delete this file from disk? This cannot be undone.\n\n${file}`)) return;
+  try {
+    const r = await api(`${S.sub}/${S.hemi}/drawn?${q({ folder: S.drawFolder, name })}`, { method: "DELETE" });
+    const d = await r.json();
+    status(`Deleted ${d.removed.join(", ")}`);
+  } catch (e) {
+    status(e.message.startsWith("404") ? `${name} has no saved file in ${S.drawFolder}/ (× removes it from the session)`
+                                       : `Delete failed — ${e.message}`, true);
+    return;
+  }
+  S.drawn.delete(name);
+  if (S.active === name) S.active = S.drawn.keys().next().value || null;
+  renderDrawn();
+  // Panel 4 may be listing (and showing) the deleted file.
+  try { S.meta = await fetchMeta(); } catch { return; }
+  renderManualFolders();
+  if (S.meta.layers.manual.dir === S.drawDir) {
+    S.items.delete(key("manual", name));
+    renderLayer("manual");
+    renderLegend();
+    view.requestColor();
+  }
 }
 
 // A save may have created the folder or changed files panel 4 is showing:
@@ -1077,6 +1107,7 @@ function wireDrawing() {
   $("new-name").onkeydown = (e) => { if (e.key === "Enter") $("new-label").click(); };
   $("save").onclick = () => S.active && saveDrawn([S.active]);
   $("save-all").onclick = () => saveDrawn([...S.drawn.keys()]);
+  $("delete-file").onclick = () => deleteDrawn(S.active);
   const op = (what, fn) => () => {
     if (!S.active) { status("Add or pick a label first", true); return; }
     setMask(fn(S.drawn.get(S.active).mask), what);

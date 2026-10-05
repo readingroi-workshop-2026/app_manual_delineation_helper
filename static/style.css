@@ -163,3 +163,7 @@ h3 { font-size: 11px; color: var(--dim); font-weight: normal; margin: 10px 0 2px
 /* cursor readout: T1w-space block */
 #cursor-info .t1w { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
 #cursor-info .t1w b { color: var(--text); font-weight: 600; }
+
+/* destructive actions (delete a file from disk) */
+button.danger { border-color: var(--danger, #d9534f); color: var(--danger, #d9534f); }
+button.danger:hover { background: var(--danger, #d9534f); color: #fff; }
