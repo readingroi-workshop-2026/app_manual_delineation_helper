@@ -167,3 +167,15 @@ h3 { font-size: 11px; color: var(--dim); font-weight: normal; margin: 10px 0 2px
 /* destructive actions (delete a file from disk) */
 button.danger { border-color: var(--danger, #d9534f); color: var(--danger, #d9534f); }
 button.danger:hover { background: var(--danger, #d9534f); color: #fff; }
+
+/* Narrow sidebar (small screens, <= 900 px: 260 px wide): rows shrink to fit
+   instead of pushing number boxes past the edge (a sideways scrollbar). */
+aside { overflow-x: hidden; }
+input[type=range] { min-width: 0; }
+.num { width: 64px; min-width: 44px; flex: 0 1 64px; }
+@media (max-width: 900px) {
+  .curv-opts .curv-lab { width: 50px; }
+  .curv-opts output { width: 30px; }
+}
+/* long paths (e.g. "Saves to /Users/.../label/<folder>/lh.<name>.label") wrap anywhere */
+.hint, #cursor-info { overflow-wrap: anywhere; }

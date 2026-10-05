@@ -357,6 +357,12 @@ uv run scripts/gen_manual_label_batch.py            # --contrast RWvsAllNotext b
 The rater name is the file name up to the first `_`. A sheet with any bad row
 writes nothing and is reported; the other sheets still run.
 
+**Small screens.** **☰** (top left) or <kbd>\</kbd> hides / shows the sidebar; windows up to
+900 px wide start with it hidden and use a narrower (260 px) sidebar whose rows shrink to fit.
+Every panel follows the window: resize it or zoom the browser (<kbd>⌘ +</kbd> / <kbd>⌘ −</kbd>)
+and the surfaces and slices refit, keeping the brain the same size relative to its panel and
+drawing at the screen's full pixel density.
+
 ### Rotating and viewing
 
 - **☰** (top left) or the `\` key hides the sidebar, to give the panels the
