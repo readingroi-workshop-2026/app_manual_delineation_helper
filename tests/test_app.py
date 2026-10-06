@@ -162,6 +162,24 @@ def test_page_and_engine_served(dataset):
     assert c.get("/static/engine/viewer.js").status_code == 200
 
 
+def test_compare_and_group_pages(dataset):
+    _, c = dataset
+    r = c.get("/compare")
+    assert r.status_code == 200 and 'id="compare-folder"' in r.text
+    assert r.headers["cache-control"] == "no-cache"
+    assert "group.js" in c.get("/group").text
+    assert c.get("/static/group.js").status_code == 200
+
+
+def test_compare_layer(dataset):
+    _, c = dataset
+    folder = "freesurfer-with_t2/{sub}/label/tiger_delineation"
+    m = c.get("/api/sub-01/lh/meta", params={"compare": folder}).json()
+    assert m["layers"]["compare"]["items"] == ["mFus-words"]
+    r = c.get("/api/sub-01/lh/layer", params={"kind": "compare", "name": "mFus-words", "dir": folder})
+    assert r.json()["vertices"] == [2, 3]
+
+
 def test_engine_copy_matches_t1w_labeling():
     """static/engine/ is the master; app_surface_t1w_labeling carries a copy."""
     copy = REPO.parent / "app_surface_t1w_labeling" / "src" / "surface_t1w_labeling" / "static" / "vendor" / "engine"

@@ -139,6 +139,7 @@ body.no-sidebar aside { display: none; }
 
 /* tool tabs: Navigate shows the layer panels, the others the drawing panels */
 .seg.tabs { margin: 4px 0 6px; }
+#draw-tools { margin: 0 0 6px; }
 body.tool-navigate .tab-draw, body:not(.tool-navigate) .tab-navigate { display: none; }
 body:not(.tool-contour) #opt-contour, body:not(.tool-brush):not(.tool-erase) #opt-brush { display: none; }
 h3 { font-size: 11px; color: var(--dim); font-weight: normal; margin: 10px 0 2px; }
@@ -179,3 +180,36 @@ input[type=range] { min-width: 0; }
 }
 /* long paths (e.g. "Saves to /Users/.../label/<folder>/lh.<name>.label") wrap anywhere */
 .hint, #cursor-info { overflow-wrap: anywhere; }
+
+/* loaded heatmap's name + colour bar on each surface panel */
+.heat-badge { position: absolute; right: 8px; bottom: 8px; width: min(220px, calc(100% - 16px));
+  padding: 4px 8px 3px; border-radius: 4px; background: #000a; pointer-events: none; font-size: 12px; }
+.heat-badge .hb-name { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; margin-bottom: 3px; }
+.heat-badge .bar { position: relative; height: 10px; border-radius: 3px;
+  background: linear-gradient(90deg, rgb(190,25,0), rgb(255,120,0), rgb(255,235,60)); }
+.heat-badge .hb-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; }
+.heat-badge .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+
+/* page switcher in the header */
+.pages { display: flex; gap: 2px; }
+.pages a { padding: 2px 8px; border-radius: 4px; color: var(--dim); text-decoration: none; background: var(--btn); }
+.pages a.on { color: var(--text); background: var(--btn-on); }
+/* compare page: two rows of panels (engine load(..., {rows})) */
+body:not(.page-compare) .compare-only { display: none; }
+#viewers.rows { flex-direction: column; }
+.viewer-row { flex: 1; display: flex; min-height: 0; border-top: 1px solid var(--line); }
+.viewer-row:first-child { border-top: 0; }
+.viewer-row:first-child .viewer .tag { color: var(--accent); }
+
+/* group page (/group): 6 x 2 panels, one subject each */
+#grid { flex: 1; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); min-width: 0; }
+.gpanel { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.gpanel.free { outline: 1px dashed var(--accent); outline-offset: -1px; }
+.ghead { display: flex; gap: 4px; align-items: center; padding: 2px 4px; font-size: 11px; background: var(--panel); }
+.ghead .gsub { width: auto; flex: 0 1 auto; min-width: 44px; padding: 1px 4px; font-size: 11px; }
+.ghead .gfix { white-space: nowrap; }
+.ghead .gstat { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gview { flex: 1; display: flex; min-height: 0; }

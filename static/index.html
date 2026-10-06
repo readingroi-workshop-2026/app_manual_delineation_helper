@@ -18,7 +18,10 @@
 <body>
 <header>
   <button id="sidebar-toggle" title="hide the sidebar (\)">☰</button>
-  <strong>Delineation Helper</strong>
+  <strong id="app-title">Delineation Helper</strong>
+  <nav class="pages" title="other views of the same data">
+    <a href="/" data-page="single">Single</a><a href="/compare" data-page="compare">Compare</a><a href="/group" data-page="group">Group</a>
+  </nav>
   <label>Subject
     <button id="prev" title="previous subject (,)">◀</button><select id="sub"></select><button id="next" title="next subject (.)">▶</button></label>
   <label>Hemi <select id="hemi"><option>lh</option><option>rh</option></select></label>
@@ -30,13 +33,16 @@
 <main>
   <aside>
     <div class="seg tabs" id="tools">
-      <button data-tool="navigate" title="view layers (N)">Navigate</button>
+      <button data-tool="navigate" title="which layers are shown: heatmap, clusters, atlas and saved labels (N)">Navigate</button>
+      <button data-tool="draw" title="draw new labels or edit saved ones (C / B / E)">Draw</button>
+    </div>
+
+    <div class="tab-draw">
+    <div class="seg small" id="draw-tools">
       <button data-tool="contour" title="paths and FreeView-style fill (C)">Contour</button>
       <button data-tool="brush" title="paint into the active label (B)">Brush</button>
       <button data-tool="erase" title="erase from the active label (E)">Erase</button>
     </div>
-
-    <div class="tab-draw">
     <p id="drawing-into" class="active-label"></p>
     <section id="opt-contour">
       <h2>Contour &amp; fill</h2>
@@ -97,6 +103,7 @@
         <datalist id="roi-names"></datalist>
         <button id="new-label">Add</button>
       </div>
+      <div class="row"><button id="open-saved" title="load this folder's saved labels into the drawing list, to edit them"></button></div>
       <ul id="drawn" class="list"></ul>
       <div class="row wrap">
         <button id="save">Save active</button>
@@ -114,6 +121,7 @@
     </section>
     </div>
 
+    <div class="tab-navigate">
     <section>
       <h2>1 · Heatmap</h2>
       <input class="dir" data-kind="heatmap" title="*.func.gii folder; {sub} = subject; Enter to apply">
@@ -130,7 +138,6 @@
       <p class="hint" id="tt-hint">Below threshold the map is not hidden: it fades out quadratically toward 0, so the context of each cluster stays visible.</p>
     </section>
 
-    <div class="tab-navigate">
     <section>
       <h2>Cursor</h2>
       <div class="row">
@@ -162,11 +169,22 @@
     </section>
 
     <section>
-      <h2>4 · Manual labels</h2>
+      <h2 id="manual-title">4 · Manual labels</h2>
+      <p class="hint compare-only">Shown in the <b>top</b> row. Every label of the folder is ticked when it is listed.</p>
       <select id="manual-folder" title="rater folders next to the atlas labels"></select>
       <input class="dir" data-kind="manual" title="<hemi>.*.label folder; {sub} = subject; Enter to apply">
       <ul id="manual" class="list scroll"></ul>
       <div class="row"><span class="spacer"></span><button data-clear="manual">Clear all</button></div>
+    </section>
+
+    <section class="compare-only">
+      <h2>5 · Compare (bottom row)</h2>
+      <p class="hint">Shown in the <b>bottom</b> row. Heatmap, clusters, atlas labels and what you draw show in both rows.</p>
+      <select id="compare-folder" title="label folders of this subject"></select>
+      <input class="dir" data-kind="compare" title="<hemi>.*.label folder; {sub} = subject; Enter to apply">
+      <ul id="compare" class="list scroll"></ul>
+      <div class="row"><button id="swap-rows" title="swap the reference and compared folders">⇅ swap rows</button>
+        <span class="spacer"></span><button data-clear="compare">Clear all</button></div>
     </section>
 
     <section>

@@ -59,6 +59,68 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   `tiger_delineation_t-threshold` and `anat_label_tiger` were renamed to these
   three, and the three (empty) folders were created for every subject. Empty
   folders are not in git.
+- **Three pages, one server.** `/` and `/compare` both serve `index.html`;
+  `app.js` reads `location.pathname` (`PAGE`, `COMPARE`). `/group` is its own
+  `group.html` + `group.js`. Header links `.pages` switch between them.
+- **Compare page = engine rows.** `view.load(..., { rows: ["ref", "compare"] })`
+  gives two rows of panels, each row its own colour buffer; `paint(out, row)`
+  skips layer `manual` (the reference) in row 1 and layer `compare` outside
+  row 1. Everything else (heatmap, clusters, atlas, drawn labels, path,
+  cursor) is painted in both rows, so drawing in any panel edits one label
+  set. `compare` is a fifth layer kind on the server (`LAYER_KEYS`,
+  config `compare_label_dir`), listed / served like `manual`. `tickAll()`
+  ticks every label of both folders on listing; `rowTags()` names rows after
+  their folders.
+- **Group page = one SurfaceViewer per panel** (subjects have different
+  meshes; 12 WebGL contexts, browsers allow ~16). Linking is done in
+  `group.js`, not the engine: the engine's `onCamera(v)` hook fires on every
+  camera change, and a fixed panel copies `getViewState()` to the other fixed
+  panels with `setViewState()` (relative to mesh size, so subjects of
+  different size frame alike). The echo back from the followers converges
+  (identical state), no loop. Labels come from `label/<folder>/` through the
+  `manual` layer with a `dir` override.
+- **Navigate | Draw tabs.** `#tools` has Navigate and Draw; `#draw-tools`
+  inside Draw has Contour / Brush / Erase (`setTool("draw")` returns to
+  `S.lastDrawTool`). The heatmap section is Navigate-only. `setTool` toggles
+  tool classes on `#viewers` with classList: assigning `className` dropped the
+  compare page's `rows` class and collapsed it to one row.
+- **Drawn labels are not auto-opened** (maintainer: one place controls what is
+  shown). `loadDrawn()` only points at the Save-to folder; `openSaved()`
+  ("Open saved labels to edit (N)") loads its files into `S.drawn`. On the
+  compare page `drawRow()` paints drawn labels only in the row whose folder
+  is the Save-to folder (both if neither). Compare and group pages open with
+  no heatmap.
+- **Group page label sets**: A (anatomy, server layer `manual`) and B (ROI,
+  layer `compare`), each with a `dir` override per folder; colours keyed
+  `set:name`, fixed ROI colours (`ROI_COLORS`, MOG brown) in both sets.
+  *View › Surface* picks inflated / pial (config `surfaces`).
+  Opacity / mesh / x-ray (`G.look`) are applied by `applyLook()` to every
+  panel and again after each panel load (a surface switch makes new viewers).
+- **Label colours**: landmarks by exact name from `ANAT_COLORS`
+  (`utils/discovery.py`; aparc.a2009s colours for FG, IOG, ITG, MOG, OTS;
+  maintainer's MFS green, PON cyan -- not in aparc), then word ROIs by
+  substring from `ROI_COLORS` (MOG-words brown), then the palette. Session key
+  `anat_colors`; used by app.js and group.js `colorFor`.
+- **No-cache headers** on everything outside `/api/` (`revalidate_static`
+  middleware): without them the browser kept an old `viewer.js` next to a new
+  `index.html` while testing the compare page.
+- **Heatmap badge on each surface panel.** `heatBadges()` (called from
+  `syncThresholdWidgets()` and after `view.load`) puts the loaded map's name
+  and a copy of the sidebar `#colorbar` (gradient, threshold tick, numbers)
+  bottom-right of every `.viewer`; removed when no heatmap is loaded. It is
+  DOM, not canvas, so *Save PNG* does not include it.
+- **Name suggestions follow the Save-to folder.** `config.yaml` →
+  `draw_label_names` maps a folder to its names (tiger_anat_landmark: FG, IOG,
+  ITG, MFS, PON, OTS, MOG); `roiNames()` fills the `#roi-names` datalist from
+  it in `fillFolderPick()`, falling back to the word-ROI names. Before this the
+  list was always the word ROIs, so landmark names only appeared for subjects
+  that already had them saved.
+- **What the compare page compares (2026-10-06).** `tiger_delineation` is the
+  OLD delineation: real words vs scrambled words (RWvsSC), a 5-ROI framework
+  (IOG, PON, pOTS, mOTS, mFus -words) that did NOT separate IOG from MOG.
+  `tiger_ROI_auto` is the NEW one, from the RWvsAllNotext auto clusters, which
+  DOES separate IOG from MOG (6 ROIs: + LOC-words). Expect the differences in
+  the IOG / MOG territory; they come from the framework change.
 - The example dataset's `label/` folders are the maintainer's data. Commit
   them only when asked (sub-02's renamed folders were, on request).
 - **Cursor (Navigate tab).** A click calls the engine's `setCursor(vertex)`;
@@ -115,6 +177,11 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   and low ambient, so gyral crowns catch light and sulcal walls fall into shade.
 - **Linked cameras** sync rotation, zoom and pan as fractions of each mesh's
   bounding radius (`syncFrom`), because inflated and pial differ in size.
+- **Rows** (`load(surfaces, faces, n, { rows })`): one colour + x-ray buffer
+  per row, `.viewer-row` divs and `#viewers.rows` only when there are 2+ rows
+  (the T1w tool's single-row DOM is unchanged). `surfaceControls` shows one
+  control row per surface, applied in every row; `snapshot()` stacks rows.
+  `onCamera(v)` hook: any camera change, for linking across instances.
 - A hidden browser tab pauses `requestAnimationFrame` and ResizeObserver, so
   camera matrices go stale; `pick()` calls `updateMatrixWorld()` for that.
 

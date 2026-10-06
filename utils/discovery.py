@@ -44,6 +44,22 @@ ROI_COLORS = {
     "pon": "#4363d8",   # blue
     "iog": "#911eb4",   # purple
     "loc": "#00c8c8",   # cyan
+    "mog": "#9a6324",   # brown
+}
+
+# Anatomical landmarks (tiger_anat_landmark): matched by EXACT name (case-
+# insensitive), before ROI_COLORS -- so "MOG" takes the atlas colour while
+# "MOG-words" keeps its ROI colour. Colours from FreeSurfer's aparc.a2009s
+# (Destrieux) colour table where the structure exists there; MFS and PON
+# are not parcellated in aparc, colours set by the maintainer.
+ANAT_COLORS = {
+    "fg": "#3c148c",    # G_oc-temp_lat-fusifor   (60, 20, 140)
+    "iog": "#173cb4",   # G_and_S_occipital_inf   (23, 60, 180)
+    "itg": "#dcdc64",   # G_temporal_inf          (220, 220, 100)
+    "mog": "#b43cb4",   # G_occipital_middle      (180, 60, 180)
+    "ots": "#dd8c14",   # S_oc-temp_lat           (221, 140, 20)
+    "mfs": "#00c800",   # mid-fusiform sulcus: not in aparc -> green
+    "pon": "#00c8c8",   # preoccipital notch: not in aparc -> cyan
 }
 
 # The word-ROIs the workshop delineates, posterior -> anterior, with the colour

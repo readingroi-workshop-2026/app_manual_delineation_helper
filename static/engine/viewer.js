@@ -142,7 +142,9 @@ const SHORT_SIDE_FOV = 30;
 export class SurfaceViewer {
   // container: element the viewer panels go into.
   // hooks (all optional):
-  //   paint(out)            fill the shared colour buffer (n*3, 0-1)
+  //   paint(out, row)       fill a row's shared colour buffer (n*3, 0-1); row
+  //                         is the index into load()'s `rows` (0 with one row)
+  //   onCamera(v)           a panel's camera moved (by the user or a link)
   //   onHover(v, vertex)    pointer moved over a surface (-1 when off it)
   //   onClick(v, vertex, ev) a click (< 5 px of movement), left button
   //   onDragStart(v, ev)    return true to take the drag instead of rotating
@@ -166,33 +168,54 @@ export class SurfaceViewer {
     requestAnimationFrame(this._frame);
   }
 
-  get colors() { return this.colorAttr?.array; }
+  get colors() { return this.rows?.[0]?.colorAttr.array; }
   requestColor() { this.needsColor = true; }
 
   // surfaces: [[name, Float32Array coords], ...] left to right; faces: Int32Array.
-  load(surfaces, faces, n) {
+  // rows: one name per row of panels, top to bottom (default: one unnamed row).
+  // Every row shows every surface; each row has its own colour buffer, so
+  // paint(out, row) can colour the rows differently (e.g. reference labels on
+  // top, compared ones below). Cameras link across rows too. With more than
+  // one row the rows go in `.viewer-row` divs and the container gets `.rows`.
+  load(surfaces, faces, n, { rows = [null] } = {}) {
     for (const v of this.viewers) {
       v.controls.dispose();
       v.renderer.dispose();
       v.el.remove();
     }
+    for (const r of this.container.querySelectorAll(":scope > .viewer-row")) r.remove();
     this.viewers = [];
     this.n = n;
     this.cursorVertex = -1;
     this.coords = Object.fromEntries(surfaces);
-    this.colorAttr = new THREE.BufferAttribute(new Float32Array(n * 3), 3);
-    // 0..1, how coloured a vertex is (0 = curvature grey): what the x-ray pass
-    // shows through a see-through surface. Shared like the colours.
-    this.hlAttr = new THREE.BufferAttribute(new Float32Array(n), 1);
-    for (const [surf, coords] of surfaces) this._makeViewer(surf, coords, faces);
+    const multi = rows.length > 1;
+    this.container.classList.toggle("rows", multi);
+    this.rows = rows.map((name) => {
+      let el = this.container;
+      if (multi) {
+        el = document.createElement("div");
+        el.className = "viewer-row";
+        this.container.appendChild(el);
+      }
+      // hl: 0..1, how coloured a vertex is (0 = curvature grey): what the
+      // x-ray pass shows through a see-through surface. Shared like the colours.
+      return { name, el, colorAttr: new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+               hlAttr: new THREE.BufferAttribute(new Float32Array(n), 1) };
+    });
+    this.colorAttr = this.rows[0].colorAttr;
+    this.hlAttr = this.rows[0].hlAttr;
+    this.rows.forEach((row, r) => {
+      for (const [surf, coords] of surfaces) this._makeViewer(surf, coords, faces, r);
+    });
     this.requestColor();
   }
 
-  _makeViewer(surf, coords, faces) {
+  _makeViewer(surf, coords, faces, r = 0) {
+    const row = this.rows[r];
     const el = document.createElement("div");
     el.className = "viewer";
-    el.innerHTML = `<div class="tag">${surf}</div>`;
-    this.container.appendChild(el);
+    el.innerHTML = `<div class="tag">${row.name ? `${row.name} · ` : ""}${surf}</div>`;
+    row.el.appendChild(el);
     // preserveDrawingBuffer so snapshot() can read the canvas back.
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -207,17 +230,17 @@ export class SurfaceViewer {
     camera.add(key, head);
     scene.add(camera, new THREE.AmbientLight(0xffffff, 0.35));
 
-    const v = { surf, el, renderer, scene, camera, key, center: new THREE.Vector3(), radius: 100 };
+    const v = { surf, row: r, el, renderer, scene, camera, key, center: new THREE.Vector3(), radius: 100 };
     this._attachPointer(v); // before the controls, so a hook can veto a drag
     v.controls = new TrackballControls(camera, renderer.domElement);
     Object.assign(v.controls, { rotateSpeed: 3.0, zoomSpeed: 1.5, panSpeed: 0.8, staticMoving: true });
-    v.controls.addEventListener("change", () => this._syncFrom(v));
+    v.controls.addEventListener("change", () => { this._syncFrom(v); this.hooks.onCamera?.(v); });
     new ResizeObserver(() => this.resize(v)).observe(el);
 
     const geom = new THREE.BufferGeometry();
     geom.setAttribute("position", new THREE.BufferAttribute(coords, 3));
-    geom.setAttribute("color", this.colorAttr); // one attribute object, shared by every mesh
-    geom.setAttribute("hl", this.hlAttr);
+    geom.setAttribute("color", row.colorAttr); // one attribute object, shared by the row's meshes
+    geom.setAttribute("hl", row.hlAttr);
     // Own copy per mesh: MeshBVH reorders the index in place, which would
     // invalidate the other mesh's tree if the buffer were shared.
     geom.setIndex(new THREE.BufferAttribute(new Uint32Array(faces), 1));
@@ -431,9 +454,11 @@ export class SurfaceViewer {
   _syncDepthPre(v) { v.depthPre.visible = v.wire.visible || v.mesh.material.opacity < 1; }
 
   // One row per surface: show / opacity / mesh. Returns the container.
+  // With several rows, one control row per surface drives it in every row.
   surfaceControls(box) {
     box.innerHTML = "";
-    for (const v of this.viewers) {
+    for (const v of this.viewers.filter((x) => x.row === 0)) {
+      const each = (fn) => () => { for (const x of this.viewers) if (x.surf === v.surf) fn(x); };
       const row = document.createElement("div");
       row.className = "row";
       const st = this._state(v);
@@ -442,10 +467,10 @@ export class SurfaceViewer {
         <label title="triangle mesh overlay; zoom in to see individual edges"><input type="checkbox" ${st.wire ? "checked" : ""}> mesh</label>
         <label title="below full opacity, show clusters / labels hidden behind the surface (e.g. down a sulcus); lower opacity = stronger"><input type="checkbox" ${st.xray ?? true ? "checked" : ""}> x-ray</label>`;
       const [show, alpha, mesh, xray] = row.querySelectorAll("input");
-      xray.onchange = () => this.setXray(v, xray.checked);
-      show.onchange = () => this.setVisible(v, show.checked);
-      alpha.oninput = () => this.setOpacity(v, +alpha.value);
-      mesh.onchange = () => this.setWire(v, mesh.checked);
+      xray.onchange = each((x) => this.setXray(x, xray.checked));
+      show.onchange = each((x) => this.setVisible(x, show.checked));
+      alpha.oninput = each((x) => this.setOpacity(x, +alpha.value));
+      mesh.onchange = each((x) => this.setWire(x, mesh.checked));
       box.appendChild(row);
     }
     return box;
@@ -550,18 +575,20 @@ export class SurfaceViewer {
   }
 
   _animate() {
-    if (this.needsColor && this.colorAttr) {
+    if (this.needsColor && this.rows?.length) {
       this.needsColor = false;
-      this.hooks.paint?.(this.colorAttr.array);
-      this.colorAttr.needsUpdate = true;
-      // How coloured each vertex is (0 = grey; curvature is always r = g = b),
-      // ramped so faint tints (a heatmap fading below threshold) don't x-ray as haze.
-      const c = this.colorAttr.array, hl = this.hlAttr.array;
-      for (let i = 0; i < this.n; i++) {
-        const r = c[3 * i], g = c[3 * i + 1], b = c[3 * i + 2];
-        hl[i] = Math.min(1, Math.max(0, (Math.max(r, g, b) - Math.min(r, g, b) - 0.04) / 0.16));
-      }
-      this.hlAttr.needsUpdate = true;
+      this.rows.forEach((row, k) => {
+        this.hooks.paint?.(row.colorAttr.array, k);
+        row.colorAttr.needsUpdate = true;
+        // How coloured each vertex is (0 = grey; curvature is always r = g = b),
+        // ramped so faint tints (a heatmap fading below threshold) don't x-ray as haze.
+        const c = row.colorAttr.array, hl = row.hlAttr.array;
+        for (let i = 0; i < this.n; i++) {
+          const r = c[3 * i], g = c[3 * i + 1], b = c[3 * i + 2];
+          hl[i] = Math.min(1, Math.max(0, (Math.max(r, g, b) - Math.min(r, g, b) - 0.04) / 0.16));
+        }
+        row.hlAttr.needsUpdate = true;
+      });
     }
     for (const v of this.viewers) {
       if (v.el.classList.contains("hidden")) continue;
@@ -571,17 +598,23 @@ export class SurfaceViewer {
     requestAnimationFrame(this._frame);
   }
 
-  // PNG (data URL) of every visible panel side by side, as on screen.
+  // PNG (data URL) of every visible panel as on screen: side by side, rows
+  // stacked.
   snapshot() {
     const shown = this.viewers.filter((v) => !v.el.classList.contains("hidden"));
     for (const v of shown) v.renderer.render(v.scene, v.camera);
-    const canvases = shown.map((v) => v.renderer.domElement);
+    const rows = (this.rows || [null]).map((_, r) =>
+      shown.filter((v) => (v.row ?? 0) === r).map((v) => v.renderer.domElement)).filter((r) => r.length);
     const out = document.createElement("canvas");
-    out.width = canvases.reduce((s, c) => s + c.width, 0);
-    out.height = Math.max(0, ...canvases.map((c) => c.height));
+    out.width = Math.max(0, ...rows.map((cs) => cs.reduce((s, c) => s + c.width, 0)));
+    out.height = rows.reduce((s, cs) => s + Math.max(...cs.map((c) => c.height)), 0);
     const ctx = out.getContext("2d");
-    let x = 0;
-    for (const c of canvases) { ctx.drawImage(c, x, 0); x += c.width; }
+    let y = 0;
+    for (const cs of rows) {
+      let x = 0;
+      for (const c of cs) { ctx.drawImage(c, x, y); x += c.width; }
+      y += Math.max(...cs.map((c) => c.height));
+    }
     return out.toDataURL("image/png");
   }
 }

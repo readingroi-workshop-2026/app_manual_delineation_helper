@@ -25,7 +25,7 @@ fs_dir: freesurfer-with_t2
 # heatmap is shown on load.
 default_subject: "02"
 default_hemi: lh
-default_contrast: RWvsSC
+default_contrast: RWvsAllNotext
 
 # Surfaces shown side by side, left to right (linked cameras). They must share
 # vertex indices, which all surfaces of one FreeSurfer hemisphere do.
@@ -44,6 +44,10 @@ atlas_label_dir: freesurfer-with_t2/{sub}/label
 # Layer 4 — user-defined manual labels (lh.*.label)
 manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 
+# Compare page (/compare): layer 4 above is the REFERENCE (top row); this
+# folder's labels are the COMPARED ones (bottom row). Both pickable in the page.
+compare_label_dir: freesurfer-with_t2/{sub}/label/tiger_ROI_auto
+
 
 # Labels drawn in the page (Contour / Brush / Erase tabs) are saved to
 # <fs_dir>/<sub>/label/<folder>/<hemi>.<name>.label. This is the folder name
@@ -56,3 +60,8 @@ draw_label_dir: tiger_ROI_auto
 #   tiger_ROI_manual     ROIs from a t-threshold map (e.g. RWvsAllNotext_mean_raw)
 #   tiger_anat_landmark  anatomical landmarks drawn by hand
 draw_label_folders: [tiger_ROI_auto, tiger_ROI_manual, tiger_anat_landmark]
+
+# Label-name suggestions in the "Label name" box, per Save-to folder. A folder
+# not listed here suggests the word-ROI names (mFus-words, ...).
+draw_label_names:
+  tiger_anat_landmark: [FG, IOG, ITG, MFS, PON, OTS, MOG]

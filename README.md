@@ -119,6 +119,41 @@ Every folder there is offered in the panel's folder list. To use a folder
 elsewhere, type its path in the box (`{sub}` = subject, Enter to apply). Only
 the selected hemisphere's files show up.
 
+### Three pages: Single · Compare · Group
+
+The header links switch between three views of the same data (same server,
+same config):
+
+- **Single** (`/`) — the page described here: inflated + pial of one subject.
+- **Compare** (`/compare`) — within-subject QC of two label folders. Four
+  panels: the **top row** (inflated, pial) shows the **reference** folder
+  (*4 · Reference*, default `tiger_delineation`), the **bottom row** the
+  **compared** folder (*5 · Compare*, default `tiger_ROI_auto`, config
+  `compare_label_dir`). Every label of both folders is ticked when listed;
+  the top row shows ONLY the reference folder, the bottom row ONLY the
+  compared one. The page opens without a heatmap (pick one in Navigate).
+  Pick either folder in the Navigate tab; **⇅ swap rows** exchanges them.
+  The heatmap, auto clusters, atlas labels and the cursor show in all four
+  panels, all four cameras move together, and drawing (Contour / Brush /
+  Erase) works in any panel. A drawn label shows in the row of the folder it
+  saves to (both rows if that folder is neither).
+- **Group** (`/group`) — one surface per subject (inflated or pial, *View ›
+  Surface*), 6 × 2 panels (the first 12 subjects; each panel has its own
+  subject dropdown). Two label sets: **A · anatomy** (default
+  `tiger_anat_landmark`) under **B · ROI** (default `tiger_ROI_auto`), each a
+  folder of its own. The sidebar's heatmap (none at start), threshold, label
+  sets, curvature, and the surface's opacity / mesh / x-ray (*View*) apply to every panel; untick a label name to hide it
+  everywhere. **📌 fixed** panels rotate, zoom and pan
+  together and follow the view buttons; untick 📌 on a panel to turn it on its
+  own (dashed outline), tick it again to snap it back. *Save PNG* writes the
+  12 panels as one image, each with its subject's name.
+
+**Navigate | Draw.** The sidebar has two tabs. *Navigate* is the one place
+that chooses what is shown (heatmap, clusters, atlas, saved labels). *Draw*
+holds Contour / Brush / Erase. The Save-to folder's labels are no longer
+opened automatically: the drawing list starts empty, and **Open saved labels
+to edit (N)** pulls that folder's labels in when you want to change them.
+
 ### Seeing clusters inside the sulci (x-ray)
 
 Lower a surface's opacity (View → the slider next to *pial*) and the clusters, labels and

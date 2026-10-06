@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delineation Helper · Group</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.8/build/index.module.js"
+    }
+  }
+  </script>
+</head>
+<body class="page-group">
+<header>
+  <button id="sidebar-toggle" title="hide the sidebar (\)">☰</button>
+  <strong>Delineation Helper · Group</strong>
+  <nav class="pages" title="other views of the same data">
+    <a href="/" data-page="single">Single</a><a href="/compare" data-page="compare">Compare</a><a href="/group" data-page="group" class="on">Group</a>
+  </nav>
+  <label>Hemi <select id="hemi"><option>lh</option><option>rh</option></select></label>
+  <span id="status" class="dim"></span>
+  <button id="png" title="save all panels as one PNG">Save PNG</button>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Heatmap (every panel)</h2>
+      <select id="heat"></select>
+      <label class="row">Threshold
+        <input type="range" id="thr" min="0" max="1" step="0.005" value="0.1">
+        <input type="number" id="thr-n" class="num" min="0" step="any" value="0.1"></label>
+      <label class="row">Opacity <input type="range" id="heat-alpha" min="0" max="1" step="0.05" value="0.85"></label>
+      <label class="row" title="below threshold the map fades out instead of disappearing (Taylor et al. 2026)"><input type="checkbox" id="heat-tt" checked> transparent threshold</label>
+      <label class="row"><input type="checkbox" id="heat-outline" checked> outline suprathreshold</label>
+      <p class="hint">Each panel's colour scale runs 0 → that subject's own maximum.</p>
+    </section>
+
+    <section>
+      <h2>Labels A · anatomy (every panel)</h2>
+      <select id="folder-0" title="label/ sub-folder, read for each panel's subject"></select>
+      <label class="row"><input type="checkbox" id="fill-0"> fill</label>
+      <ul id="names-0" class="list scroll"></ul>
+    </section>
+
+    <section>
+      <h2>Labels B · ROI (every panel)</h2>
+      <select id="folder-1" title="label/ sub-folder, read for each panel's subject"></select>
+      <label class="row"><input type="checkbox" id="fill-1"> fill</label>
+      <ul id="names-1" class="list scroll"></ul>
+      <label class="row">fill opacity <input type="range" id="fill-alpha" min="0.05" max="1" step="0.05" value="0.6"></label>
+      <p class="hint">Names found in any panel's folder (the number = panels that have it); untick to hide that label everywhere. A is drawn under B.</p>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <label class="row">Surface <select id="surf" title="the surface every panel shows"></select></label>
+      <label class="row" title="surface opacity, every panel">opacity
+        <input type="range" id="surf-alpha" min="0.05" max="1" step="0.05" value="1"></label>
+      <div class="row">
+        <label title="triangle mesh overlay; zoom in to see individual edges"><input type="checkbox" id="surf-wire"> mesh</label>
+        <label title="below full opacity, show labels / heatmap hidden behind the surface (e.g. down a sulcus); lower opacity = stronger"><input type="checkbox" id="surf-xray" checked> x-ray</label>
+      </div>
+      <label class="row"><input type="checkbox" id="curv-on" checked> curvature shading</label>
+      <div id="curv-opts" class="curv-opts"></div>
+      <div class="row wrap" id="views">
+        <button data-view="lateral">Lateral</button>
+        <button data-view="medial">Medial</button>
+        <button data-view="ventral">Ventral</button>
+        <button data-view="dorsal">Dorsal</button>
+        <button data-view="anterior">Anterior</button>
+        <button data-view="posterior">Posterior</button>
+      </div>
+      <div class="row"><button id="fix-all">📌 fix all</button><button id="free-all">free all</button></div>
+      <p class="hint"><b>📌 fixed</b> panels rotate, zoom and pan together, and the view buttons move them.
+        Untick 📌 on a panel to turn it on its own; tick it again and it snaps back to the group.
+        Each panel's subject is its own dropdown.</p>
+    </section>
+  </aside>
+
+  <div id="stage">
+    <div id="grid"></div>
+  </div>
+</main>
+
+<footer id="hover" class="dim">Loading…</footer>
+
+<script type="module" src="/static/group.js"></script>
+</body>
+</html>

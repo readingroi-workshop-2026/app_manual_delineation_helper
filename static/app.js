@@ -12,8 +12,15 @@ import * as M from "./engine/mesh.js";
 import * as D from "./draw.js";
 
 const $ = (id) => document.getElementById(id);
-const KINDS = ["clusters", "atlas", "manual"];
+const KINDS = ["clusters", "atlas", "manual", "compare"];
 const CUSTOM = "__custom__";
+// /compare: within-subject QC. Two rows of panels: the reference labels (layer
+// 4, "manual") on top, the compared ones (layer 5, "compare") below; the
+// heatmap, clusters, atlas labels and drawn labels show in both rows, and
+// drawing in either row edits the same labels.
+const PAGE = location.pathname.replace(/\/+$/, "") === "/compare" ? "compare" : "single";
+const COMPARE = PAGE === "compare";
+const LABEL_KINDS = ["atlas", "manual", "compare"];   // folder-of-labels layers
 
 const S = {
   session: null, meta: null,
@@ -82,9 +89,11 @@ function colorFor(kind, name) {
   const k = key(kind, name);
   if (!S.colors[k]) {
     const low = name.toLowerCase();
+    // Landmarks by exact name (aparc.a2009s colours), then word ROIs by substring.
+    const anat = S.session.anat_colors?.[low];
     const roi = Object.entries(S.session.roi_colors).find(([r]) => low.includes(r));
     const pal = S.session.cluster_colors;
-    S.colors[k] = hexRgb(roi ? roi[1] : pal[paletteNext++ % pal.length]);
+    S.colors[k] = hexRgb(anat || (roi ? roi[1] : pal[paletteNext++ % pal.length]));
   }
   return S.colors[k];
 }
@@ -116,12 +125,25 @@ function heatColor(t) {
   return [0, 1, 2].map((c) => a[c] + (b[c] - a[c]) * f);
 }
 
-function paint(out) {
+// Compare page: the row showing the Save-to folder (0 ref, 1 compare), or
+// null for both.
+function drawRow() {
+  if (!COMPARE || !S.meta) return null;
+  if (S.meta.layers.manual.dir === S.drawDir) return 0;
+  if (S.meta.layers.compare.dir === S.drawDir) return 1;
+  return null;
+}
+
+// row: 0, or on the compare page 0 = top (reference) / 1 = bottom (compare).
+function paint(out, row = 0) {
   const n = S.n;
   paintCurvature(out, S.curv, n, S.curvOn, S.curvOpts);
   if (S.heat) paintHeat(out);
-  // Layer order: clusters, then atlas (annots under labels), then manual.
+  // Layer order: clusters, then atlas (annots under labels), then manual /
+  // compare -- the reference labels only in the top row, compared ones below.
   for (const kind of KINDS) {
+    if (kind === "manual" && row === 1) continue;
+    if (kind === "compare" && row !== 1) continue;
     const items = [...S.items.values()].filter((it) => it.kind === kind && it.on && !it.hidden);
     for (const it of items.filter((x) => x.type === "annot")) {
       const { labels, colors, regions, boundary } = it;
@@ -140,8 +162,11 @@ function paint(out) {
       for (const i of it.outline) blend(out, i, color, 1);
     }
   }
-  // What you draw goes on top, then the path being drawn.
+  // What you draw goes on top, then the path being drawn. On the compare page
+  // only in the row whose folder it saves to (both if neither).
+  const dRow = drawRow();
   for (const [name, l] of S.drawn) {
+    if (dRow !== null && dRow !== row) break;
     if (!l.visible) continue;
     const color = colorFor("drawn", name);
     const a = name === S.active ? Math.min(1, S.drawAlpha + 0.1) : S.drawAlpha;
@@ -486,6 +511,13 @@ function fillFolderPick() {
     (others.length ? `<optgroup label="other folders of ${S.sub}">${others.map((f) => opt(f)).join("")}</optgroup>` : "") +
     `<option value="${CUSTOM}">custom… (type a name above)</option>`;
   sel.value = [...sel.options].some((o) => o.value === S.drawFolder) ? S.drawFolder : CUSTOM;
+  $("roi-names").innerHTML = roiNames().map((n) => `<option value="${esc(n)}">`).join("");
+}
+
+// Name suggestions for the current Save-to folder (config: draw_label_names),
+// else the word-ROI names.
+function roiNames() {
+  return S.session.draw_label_names?.[S.drawFolder] ?? S.session.roi_names;
 }
 
 function addLabel(name) {
@@ -496,13 +528,13 @@ function addLabel(name) {
 }
 
 // Drawing needs a label to draw into. Without one, start one: the name typed in
-// the box, else the first word-ROI name not drawn yet (else roi1, roi2, ...).
+// the box, else the first suggested name (roiNames) not drawn yet (else roi1, roi2, ...).
 function ensureActive() {
   if (S.active) return true;
   const typed = $("new-name").value.trim();
   let name = typed;
   if (!name) {
-    name = S.session.roi_names.find((n) => !S.drawn.has(n));
+    name = roiNames().find((n) => !S.drawn.has(n));
     for (let k = 1; !name; k++) if (!S.drawn.has(`roi${k}`)) name = `roi${k}`;
   }
   if (!NAME_RE.test(name)) { status("Label names: letters, digits and . _ + - only", true); return false; }
@@ -550,21 +582,44 @@ function renderDrawn() {
 }
 
 // (Re)load the save folder's labels for this subject; they become editable.
+// Point the drawing at the Save-to folder. Its saved labels are NOT opened:
+// what is shown is chosen in Navigate (one place), and the drawing list holds
+// only what you draw -- or what "Open saved" pulls in to edit.
 async function loadDrawn() {
   const d = await getJSON(`${S.sub}/${S.hemi}/drawn?${q({ folder: S.drawFolder })}`);
-  const keep = S.active;
   S.drawn = new Map();
   S.undo = [];
+  S.active = null;
+  S.savedInFolder = d.labels;
+  S.drawDir = d.dir;
+  setOpenSaved();
+  $("draw-out").textContent = `Saves to ${d.dir}/${S.hemi}.<name>.label` +
+    (d.exists ? "" : " (folder is created on the first save)") + " — overwrites a file of the same name.";
+  renderDrawn();
+}
+
+function setOpenSaved() {
+  const n = Object.keys(S.savedInFolder || {}).length;
+  const b = $("open-saved");
+  b.textContent = n ? `Open saved labels to edit (${n})` : "no saved labels in this folder yet";
+  b.disabled = !n;
+}
+
+// Load the folder's saved labels into the drawing list (not already there).
+async function openSaved() {
+  const d = await getJSON(`${S.sub}/${S.hemi}/drawn?${q({ folder: S.drawFolder })}`);
+  S.savedInFolder = d.labels;
   for (const [name, verts] of Object.entries(d.labels)) {
+    if (S.drawn.has(name)) continue;
     const mask = new Uint8Array(S.n);
     for (const i of verts) if (i >= 0 && i < S.n) mask[i] = 1;
     S.drawn.set(name, { mask, visible: true, dirty: false });
   }
-  S.drawDir = d.dir;
-  S.active = S.drawn.has(keep) ? keep : S.drawn.keys().next().value || null;
-  $("draw-out").textContent = `Saves to ${d.dir}/${S.hemi}.<name>.label` +
-    (d.exists ? "" : " (folder is created on the first save)") + " — overwrites a file of the same name.";
+  S.active ??= S.drawn.keys().next().value || null;
+  setOpenSaved();
   renderDrawn();
+  view.requestColor();
+  status(`Opened ${Object.keys(d.labels).length} saved labels from ${S.drawFolder}/`);
 }
 
 async function saveDrawn(names) {
@@ -608,28 +663,38 @@ async function deleteDrawn(name) {
   S.drawn.delete(name);
   if (S.active === name) S.active = S.drawn.keys().next().value || null;
   renderDrawn();
-  // Panel 4 may be listing (and showing) the deleted file.
+  await refreshSaved();
+  // Panel 4 (or 5, compare page) may be listing (and showing) the deleted file.
   try { S.meta = await fetchMeta(); } catch { return; }
   renderManualFolders();
-  if (S.meta.layers.manual.dir === S.drawDir) {
-    S.items.delete(key("manual", name));
-    renderLayer("manual");
-    renderLegend();
-    view.requestColor();
+  for (const kind of ["manual", "compare"]) {
+    if (S.meta.layers[kind].dir !== S.drawDir) continue;
+    S.items.delete(key(kind, name));
+    renderLayer(kind);
   }
+  renderLegend();
+  view.requestColor();
 }
 
 // A save may have created the folder or changed files panel 4 is showing:
 // re-list, and reload the ticked manual labels that were just overwritten.
+async function refreshSaved() {
+  try { S.savedInFolder = (await getJSON(`${S.sub}/${S.hemi}/drawn?${q({ folder: S.drawFolder })}`)).labels; } catch {}
+  setOpenSaved();
+}
+
 async function afterSave(names) {
+  await refreshSaved();
   try { S.meta = await fetchMeta(); } catch { return; }
   renderManualFolders();
-  if (S.meta.layers.manual.dir === S.drawDir) {
-    const again = names.filter((n) => isOn("manual", n));
-    for (const n of again) S.items.delete(key("manual", n));
-    if (again.length) await setOn("manual", again, true);
+  for (const kind of ["manual", "compare"]) {
+    if (S.meta.layers[kind].dir === S.drawDir) {
+      const again = names.filter((n) => isOn(kind, n));
+      for (const n of again) S.items.delete(key(kind, n));
+      if (again.length) await setOn(kind, again, true);
+    }
+    renderLayer(kind);
   }
-  renderLayer("manual");
 }
 
 // ---------------------------------------------------------------- heatmap
@@ -660,7 +725,7 @@ function syncThresholdWidgets() {
   for (const id of ["c-thr-r", "c-thr-n"]) $(id).disabled = !on;
   $("c-map").textContent = on ? S.heat.name : "none — pick one in Navigate › 1 · Heatmap";
   $("colorbar").style.visibility = on ? "" : "hidden";
-  if (!on) return;
+  if (!on) { heatBadges(); return; }
   const thr = currentThreshold();
   const step = Math.max(S.heat.max / 200, 1e-4);
   Object.assign($("thr"), { min: 0, max: S.heat.max, step, value: thr });
@@ -670,6 +735,26 @@ function syncThresholdWidgets() {
   $("c-map").textContent = S.heat.name;
   Object.assign($("c-thr-r"), { min: 0, max: S.heat.max, step, value: thr });
   Object.assign($("c-thr-n"), { min: 0, max: S.heat.max, step, value: +thr.toPrecision(4) });
+  heatBadges();
+}
+
+// The loaded heatmap's name and colour bar on every surface panel, a copy of
+// the sidebar's #colorbar (same gradient, threshold tick and numbers), so the
+// map in view is named on the brain itself.
+function heatBadges() {
+  const src = $("colorbar");
+  for (const el of document.querySelectorAll("#viewers .viewer")) {
+    let b = el.querySelector(".heat-badge");
+    if (!S.heat) { b?.remove(); continue; }
+    if (!b) { b = document.createElement("div"); b.className = "heat-badge"; el.appendChild(b); }
+    const bar = src.querySelector(".bar"), mark = $("cb-mark");
+    b.innerHTML =
+      `<div class="hb-name" title="${esc(S.heat.name)}">${esc(S.heat.name)}</div>` +
+      `<div class="bar" style="background:${bar.style.background || ""}">` +
+      (mark.hidden ? "" : `<span class="hb-mark" style="left:${mark.style.left}"></span>`) + `</div>` +
+      `<div class="ticks"><span>${esc($("cb-lo").textContent)}</span><span>${esc($("cb-mid").textContent)}</span>` +
+      `<span>${esc($("cb-hi").textContent)}</span></div>`;
+  }
 }
 
 // Hard threshold: the bar is thr -> max. Transparent: 0 -> max, faded below the
@@ -853,19 +938,37 @@ function renderHeatmaps() {
 
 function renderManualFolders() {
   fillFolderPick();   // the "Save to" dropdown lists the same label/ folders
-  const sel = $("manual-folder");
   const atlas = S.templates.atlas.replace(/\/+$/, "");
   const opts = S.meta.label_folders.map((f) => [`${atlas}/${f}`, `${f}/`]);
-  sel.innerHTML = opts.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("") +
-    `<option value="${CUSTOM}">other folder (type below)…</option>`;
-  sel.value = opts.some(([v]) => v === S.templates.manual) ? S.templates.manual : CUSTOM;
+  for (const kind of ["manual", "compare"]) {
+    const sel = $(`${kind}-folder`);
+    sel.innerHTML = opts.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("") +
+      `<option value="${CUSTOM}">other folder (type below)…</option>`;
+    sel.value = opts.some(([v]) => v === S.templates[kind]) ? S.templates[kind] : CUSTOM;
+  }
+  rowTags();
+}
+
+// Compare page: name each row after its folder ("tiger_delineation · pial").
+const folderName = (tmpl) => (tmpl || "").replace(/\/+$/, "").split("/").pop() || "—";
+function rowTags() {
+  if (!COMPARE) return;
+  const names = [`ref: ${folderName(S.templates.manual)}`, `compare: ${folderName(S.templates.compare)}`];
+  for (const v of view.viewers) v.el.querySelector(".tag").textContent = `${names[v.row]} · ${v.surf}`;
+}
+
+// Compare page: a reference / compared folder shows all its labels at once.
+async function tickAll(kind) {
+  if (!COMPARE || !S.meta.layers[kind].exists) return;
+  const names = S.meta.layers[kind].items.filter((n) => !isOn(kind, n));
+  if (names.length) await setOn(kind, names, true);
 }
 
 // ---------------------------------------------------------------- legend
 // Every ticked label/cluster, grouped: click hides/shows it on the surface
 // (it stays ticked), double-click shows only it within its group, hover fills
 // it -- the quick way to go through clusters one by one and map them to ROIs.
-const GROUP_TITLES = { atlas: "Atlas", manual: "Manual" };
+const GROUP_TITLES = { atlas: "Atlas", manual: COMPARE ? "Reference (top)" : "Manual", compare: "Compare (bottom)" };
 
 // [title, items, short name] per group: one group per contrast (entries are
 // just "#id", in listing order = posterior -> anterior), then atlas, manual.
@@ -877,7 +980,7 @@ function legendGroups() {
     const items = shown("clusters", names);
     if (items.length) groups.push([contrast, items, (n) => n.replace(/^.* (#\d+)$/, "$1")]);
   }
-  for (const kind of ["atlas", "manual"]) {
+  for (const kind of LABEL_KINDS) {
     const items = shown(kind, S.meta.layers[kind].items);
     if (items.length) groups.push([GROUP_TITLES[kind], items, (n) => n]);
   }
@@ -943,6 +1046,7 @@ async function refreshLayer(kind) {
   if (kind === "heatmap") { renderHeatmaps(); await setHeatmap(""); }
   else renderLayer(kind);
   if (kind === "atlas") renderManualFolders();
+  if (kind === "manual" || kind === "compare") { rowTags(); await tickAll(kind); }
   view.requestColor();
 }
 
@@ -981,7 +1085,8 @@ async function loadSubject() {
     S.contour = { points: [], cursor: "tail", awaitingSeed: null, path: [] };
     renderLegend();
     S.adj = M.buildAdjacency(faces, S.n);
-    view.load(surfaces, faces, S.n);
+    view.load(surfaces, faces, S.n, COMPARE ? { rows: ["ref", "compare"] } : undefined);
+    heatBadges();
     S.cursorV = -1;             // vertex numbers differ between subjects / hemispheres
     showCursorInfo();
     view.surfaceControls($("surf-toggles"));
@@ -997,13 +1102,14 @@ async function loadSubject() {
     renderManualFolders();
 
     const heatNames = meta.layers.heatmap.items;
-    const firstHeat = keepHeat ?? `${S.session.default_contrast}_score`;
+    // The compare page opens without a heatmap (pick one in Navigate).
+    const firstHeat = keepHeat ?? (COMPARE ? null : `${S.session.default_contrast}_score`);
     if (heatNames.includes(firstHeat)) { $("heat").value = firstHeat; await setHeatmap(firstHeat); }
     else syncThresholdWidgets();
     const byContrast = meta.layers.clusters.by_contrast;
     const clusterNames = keepContrasts.flatMap((c) => byContrast[c] || []);
     if (clusterNames.length) await setOn("clusters", clusterNames, true);
-    for (const kind of ["atlas", "manual"]) {
+    for (const kind of LABEL_KINDS) {
       const avail = new Set([...meta.layers[kind].items, ...(meta.layers[kind].annots || [])]);
       const keep = keepOn.filter((k) => k.kind === kind && avail.has(k.name));
       if (!keep.length) continue;
@@ -1017,6 +1123,8 @@ async function loadSubject() {
       }
       renderLayer(kind);
     }
+    await tickAll("manual");
+    await tickAll("compare");
     renderLegend();
     await loadDrawn();
     view.requestColor();
@@ -1029,12 +1137,18 @@ async function loadSubject() {
 }
 
 // ---------------------------------------------------------------- UI wiring
+// Two tabs, Navigate | Draw; Draw holds the Contour / Brush / Erase tools and
+// comes back to the last one used.
 function setTool(t) {
+  if (t === "draw") t = S.lastDrawTool || "contour";
   S.tool = t;
-  for (const b of $("tools").children) b.classList.toggle("on", b.dataset.tool === t);
+  if (t !== "navigate") S.lastDrawTool = t;
+  for (const b of $("tools").children) b.classList.toggle("on", (b.dataset.tool === "navigate") === (t === "navigate"));
+  for (const b of $("draw-tools").children) b.classList.toggle("on", b.dataset.tool === t);
   document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim();
   document.body.classList.add(`tool-${t}`);
-  $("viewers").className = t;
+  // classList, not className: the compare page's "rows" class must stay.
+  for (const k of ["navigate", "contour", "brush", "erase"]) $("viewers").classList.toggle(k, k === t);
 }
 function setSeg(id, attr, val) {
   for (const b of $(id).children) b.classList.toggle("on", b.dataset[attr] === val);
@@ -1057,6 +1171,8 @@ function setRadius(r) {
 
 function wireDrawing() {
   $("tools").onclick = (e) => e.target.dataset.tool && setTool(e.target.dataset.tool);
+  $("draw-tools").onclick = (e) => e.target.dataset.tool && setTool(e.target.dataset.tool);
+  $("open-saved").onclick = () => openSaved();
   $("draw-mode").onclick = (e) => {
     if (!e.target.dataset.mode) return;
     S.drawMode = e.target.dataset.mode;
@@ -1186,16 +1302,25 @@ function wire() {
     el.onkeydown = (e) => { if (e.key === "Enter") el.blur(); };
     el.onchange = () => {
       S.templates[kind] = el.value.trim();
-      if (kind === "manual") renderManualFolders();
+      if (kind === "manual" || kind === "compare") renderManualFolders();
       refreshLayer(kind);
     };
   }
   for (const el of document.querySelectorAll(".filter")) el.oninput = () => renderLayer(el.dataset.kind);
-  $("manual-folder").onchange = (e) => {
-    if (e.target.value === CUSTOM) { document.querySelector(".dir[data-kind=manual]").focus(); return; }
-    S.templates.manual = e.target.value;
-    document.querySelector(".dir[data-kind=manual]").value = e.target.value;
-    refreshLayer("manual");
+  for (const kind of ["manual", "compare"]) {
+    $(`${kind}-folder`).onchange = (e) => {
+      const dir = document.querySelector(`.dir[data-kind=${kind}]`);
+      if (e.target.value === CUSTOM) { dir.focus(); return; }
+      S.templates[kind] = dir.value = e.target.value;
+      refreshLayer(kind);
+    };
+  }
+  $("swap-rows").onclick = async () => {
+    [S.templates.manual, S.templates.compare] = [S.templates.compare, S.templates.manual];
+    for (const kind of ["manual", "compare"]) document.querySelector(`.dir[data-kind=${kind}]`).value = S.templates[kind];
+    renderManualFolders();
+    await refreshLayer("manual");
+    await refreshLayer("compare");
   };
   for (const b of document.querySelectorAll("[data-clear]")) {
     b.onclick = () => {
@@ -1224,6 +1349,7 @@ function wire() {
   $("png").onclick = () => {
     if (!S.meta) return;
     const parts = [S.sub, S.hemi];
+    if (COMPARE) parts.push(`${folderName(S.templates.manual)}-vs-${folderName(S.templates.compare)}`);
     if (S.heat) parts.push(S.heat.name, `thr${+currentThreshold().toPrecision(3)}`);
     const a = document.createElement("a");
     a.href = view.snapshot();
@@ -1233,6 +1359,13 @@ function wire() {
 }
 
 async function init() {
+  document.body.classList.add(`page-${PAGE}`);
+  for (const a of document.querySelectorAll(".pages a")) a.classList.toggle("on", a.dataset.page === PAGE);
+  if (COMPARE) {
+    document.title = "Delineation Helper · Compare";
+    $("app-title").textContent = "Delineation Helper · Compare";
+    $("manual-title").textContent = "4 · Reference (top row)";
+  }
   wire();
   try {
     S.session = await getJSON("session");
@@ -1240,7 +1373,6 @@ async function init() {
     S.drawFolder = S.session.draw_folder;
     $("draw-folder").value = S.drawFolder;
     fillFolderPick();
-    $("roi-names").innerHTML = S.session.roi_names.map((n) => `<option value="${esc(n)}">`).join("");
     for (const el of document.querySelectorAll(".dir")) el.value = S.templates[el.dataset.kind];
     $("sub").innerHTML = S.session.subjects.map((s) => `<option>${s}</option>`).join("");
     if (S.session.default_subject) $("sub").value = S.session.default_subject;

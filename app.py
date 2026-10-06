@@ -47,6 +47,7 @@ from utils.config import (
 from utils.discovery import (
     CLUSTER_COLORS,
     ROI_COLORS,
+    ANAT_COLORS,
     WORD_ROIS,
     cluster_labels_in,
     clusters_by_contrast,
@@ -64,6 +65,8 @@ LAYER_KEYS = {
     "clusters": "clusters_dir",
     "atlas": "atlas_label_dir",
     "manual": "manual_label_dir",
+    # Compare page: the labels shown in the bottom row (manual = the top row).
+    "compare": "compare_label_dir",
 }
 # Save-folder and label names: one path component, no leading dot, so a name
 # can never climb out of the subject's label/ folder.
@@ -110,6 +113,16 @@ def _binary(arr: np.ndarray) -> Response:
 
 def create_app(config: dict) -> FastAPI:
     app = FastAPI(title="delineation-helper", version=__version__)
+
+    # Pages and static files change on disk while the server runs; without this a
+    # browser may reuse an old app.js next to a new index.html (a dead button).
+    # "no-cache" = revalidate every time: unchanged files still come back as 304.
+    @app.middleware("http")
+    async def revalidate_static(request, call_next):
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
     surfaces = list(config.get("surfaces") or ["inflated", "pial"])
 
     def check(sub: str, hemi: str) -> tuple[str, str, str]:
@@ -153,6 +166,16 @@ def create_app(config: dict) -> FastAPI:
     def index() -> FileResponse:
         return FileResponse(STATIC / "index.html")
 
+    # Within-subject QC: the same page, two rows (reference / compare labels).
+    @app.get("/compare")
+    def compare_page() -> FileResponse:
+        return FileResponse(STATIC / "index.html")
+
+    # Group view: one inflated surface per subject, 6 x 2, cameras linkable.
+    @app.get("/group")
+    def group_page() -> FileResponse:
+        return FileResponse(STATIC / "group.html")
+
     @app.get("/api/session")
     def session() -> dict:
         subjects = list_subjects(config)
@@ -168,9 +191,14 @@ def create_app(config: dict) -> FastAPI:
             "templates": {k: str(config.get(v, "")) for k, v in LAYER_KEYS.items()},
             "cluster_colors": CLUSTER_COLORS,
             "roi_colors": ROI_COLORS,
+            "anat_colors": ANAT_COLORS,
             "roi_names": [name for name, _ in WORD_ROIS],
             "draw_folder": str(config.get("draw_label_dir", "manual_delineation")),
             "draw_folders": [str(f) for f in (config.get("draw_label_folders") or [])],
+            "draw_label_names": {
+                str(f): [str(n) for n in names]
+                for f, names in (config.get("draw_label_names") or {}).items()
+            },
         }
 
     @app.get("/api/{sub}/{hemi}/meta")
@@ -181,6 +209,7 @@ def create_app(config: dict) -> FastAPI:
         clusters: str | None = None,
         atlas: str | None = None,
         manual: str | None = None,
+        compare: str | None = None,
     ) -> dict:
         sub, hemi_fs, hemi_bids = check(sub, hemi)
         found = [s for s in surfaces if surf_path(config, sub, hemi_fs, s).is_file()]
@@ -189,7 +218,8 @@ def create_app(config: dict) -> FastAPI:
         counts = {s: len(load_geometry(surf_path(config, sub, hemi_fs, s))[0]) for s in found}
         if len(set(counts.values())) != 1:
             raise HTTPException(409, f"surfaces disagree on vertex count: {counts}")
-        templates = {"heatmap": heatmap, "clusters": clusters, "atlas": atlas, "manual": manual}
+        templates = {"heatmap": heatmap, "clusters": clusters, "atlas": atlas, "manual": manual,
+                     "compare": compare}
         layers = {}
         for kind, tmpl in templates.items():
             d, items, annots = listing(kind, sub, hemi_fs, hemi_bids, tmpl)
@@ -283,7 +313,7 @@ def create_app(config: dict) -> FastAPI:
         used to read anything else.
         """
         sub, hemi_fs, hemi_bids = check(sub, hemi)
-        if kind not in ("clusters", "atlas", "manual"):
+        if kind not in ("clusters", "atlas", "manual", "compare"):
             raise HTTPException(400, f"bad layer {kind!r}")
         _, labels, annots = listing(kind, sub, hemi_fs, hemi_bids, dir)
         if name in labels:
