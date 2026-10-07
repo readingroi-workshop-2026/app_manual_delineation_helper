@@ -90,7 +90,7 @@ function colorFor(kind, name) {
   if (!S.colors[k]) {
     const low = name.toLowerCase();
     // Landmarks by exact name (aparc.a2009s colours), then word ROIs by substring.
-    const anat = S.session.anat_colors?.[low];
+    const anat = S.session.anat_colors?.[low.replace(/^aparc\./, "")];
     const roi = Object.entries(S.session.roi_colors).find(([r]) => low.includes(r));
     const pal = S.session.cluster_colors;
     S.colors[k] = hexRgb(anat || (roi ? roi[1] : pal[paletteNext++ % pal.length]));
@@ -511,7 +511,32 @@ function fillFolderPick() {
     (others.length ? `<optgroup label="other folders of ${S.sub}">${others.map((f) => opt(f)).join("")}</optgroup>` : "") +
     `<option value="${CUSTOM}">custom… (type a name above)</option>`;
   sel.value = [...sel.options].some((o) => o.value === S.drawFolder) ? S.drawFolder : CUSTOM;
-  $("roi-names").innerHTML = roiNames().map((n) => `<option value="${esc(n)}">`).join("");
+  renderNameList();
+}
+
+// The name list: the folder's suggested names plus every name saved there on
+// either hemisphere, each tagged with where it is saved ("lh ✓ · rh —"), so
+// mirroring one hemisphere's labels on the other is a matter of picking down
+// the list.
+function renderNameList() {
+  const by = S.savedByHemi || {};
+  const has = (h, n) => (by[h] || []).includes(n);
+  const names = [...new Set([...roiNames(), ...(by.lh || []), ...(by.rh || [])])];
+  $("roi-names").innerHTML = names.map((n) =>
+    `<option value="${esc(n)}" label="lh ${has("lh", n) ? "✓" : "—"} · rh ${has("rh", n) ? "✓" : "—"}">`).join("");
+}
+
+// Which names the Save-to folder holds on each hemisphere (the other one is
+// listed here; this one is S.savedInFolder).
+async function hemiStatus() {
+  const other = S.hemi === "lh" ? "rh" : "lh";
+  let o = {};
+  try { o = (await getJSON(`${S.sub}/${other}/drawn?${q({ folder: S.drawFolder })}`)).labels; } catch {}
+  S.savedByHemi = { [S.hemi]: Object.keys(S.savedInFolder || {}).sort(), [other]: Object.keys(o).sort() };
+  setSeg("draw-hemi", "hemi", S.hemi);
+  const line = (h) => `${h}: ${S.savedByHemi[h].length ? S.savedByHemi[h].join(", ") : "none yet"}`;
+  $("hemi-progress").textContent = `Saved in ${S.drawFolder}/ — ${line("lh")} · ${line("rh")}`;
+  renderNameList();
 }
 
 // Name suggestions for the current Save-to folder (config: draw_label_names),
@@ -540,7 +565,7 @@ function ensureActive() {
   if (!NAME_RE.test(name)) { status("Label names: letters, digits and . _ + - only", true); return false; }
   addLabel(name);
   $("new-name").value = "";
-  status(`Drawing into ${name}${typed ? "" : " — add or click another label in Drawn labels to switch"}`);
+  status(`Drawing into ${S.hemi}.${name}${typed ? "" : " — add or click another label in Drawn labels to switch"}`);
   return true;
 }
 
@@ -553,7 +578,7 @@ function renderDrawn() {
   const ul = $("drawn");
   ul.innerHTML = "";
   if (!S.drawn.size) ul.innerHTML = `<li class="empty">no labels yet — add one above, or just start drawing</li>`;
-  $("drawing-into").textContent = S.active ? `Drawing into: ${S.active}` : "Drawing into: (new label on first click)";
+  $("drawing-into").textContent = S.active ? `Drawing into: ${S.hemi}.${S.active}` : `Drawing into: (new ${S.hemi} label on first click)`;
   for (const [name, l] of S.drawn) {
     let count = 0;
     for (let i = 0; i < S.n; i++) count += l.mask[i];
@@ -601,8 +626,9 @@ async function loadDrawn() {
 function setOpenSaved() {
   const n = Object.keys(S.savedInFolder || {}).length;
   const b = $("open-saved");
-  b.textContent = n ? `Open saved labels to edit (${n})` : "no saved labels in this folder yet";
+  b.textContent = n ? `Open saved ${S.hemi} labels to edit (${n})` : `no saved ${S.hemi} labels in this folder yet`;
   b.disabled = !n;
+  hemiStatus();
 }
 
 // Load the folder's saved labels into the drawing list (not already there).
@@ -1173,6 +1199,13 @@ function wireDrawing() {
   $("tools").onclick = (e) => e.target.dataset.tool && setTool(e.target.dataset.tool);
   $("draw-tools").onclick = (e) => e.target.dataset.tool && setTool(e.target.dataset.tool);
   $("open-saved").onclick = () => openSaved();
+  // Hemisphere switch next to the drawing (the header's Hemi does the same).
+  $("draw-hemi").onclick = (e) => {
+    const h = e.target.dataset.hemi;
+    if (!h || h === S.hemi) return;
+    $("hemi").value = h;
+    loadSubject();
+  };
   $("draw-mode").onclick = (e) => {
     if (!e.target.dataset.mode) return;
     S.drawMode = e.target.dataset.mode;

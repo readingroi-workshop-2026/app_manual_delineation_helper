@@ -119,12 +119,20 @@ Every folder there is offered in the panel's folder list. To use a folder
 elsewhere, type its path in the box (`{sub}` = subject, Enter to apply). Only
 the selected hemisphere's files show up.
 
-### Three pages: Single · Compare · Group
+### Four pages: Single · Both · Compare · Group
 
 The header links switch between three views of the same data (same server,
 same config):
 
 - **Single** (`/`) — the page described here: inflated + pial of one subject.
+- **Both** (`/both`) — one subject, **lh and rh together** in each panel
+  (inflated | pial, as on Single). On inflated the hemispheres are moved apart
+  so they don't overlap; pial stays in brain space. Tick *lh* / *rh* off to see
+  the other's medial side. One heatmap colour scale for both hemispheres;
+  three label sets A / B / C, each any `label/` sub-folder or the flat
+  `label/` folder (atlas + `aparc.*` regions); hover / cursor say which
+  hemisphere and vertex. Opens with no heatmap and the pial at 75 % opacity
+  with x-ray on. View only — draw on Single.
 - **Compare** (`/compare`) — within-subject QC of two label folders. Four
   panels: the **top row** (inflated, pial) shows the **reference** folder
   (*4 · Reference*, default `tiger_delineation`), the **bottom row** the
@@ -170,6 +178,15 @@ and buried parts are drawn flat (unlit), so you can tell them from the ones in f
 file from disk: `<subject>/label/<Save to folder>/<hemi>.<name>.label`, plus its `.contour.json`
 sidecar if there is one. It asks first and shows the exact path. **This cannot be undone.**
 The × on a row only removes the label from the page; its file stays.
+
+### Left and right hemisphere
+
+Both hemispheres save into the same step folders: `lh.FG.label` and
+`rh.FG.label` sit side by side in `tiger_anat_landmark/` (likewise
+`tiger_ROI_auto/`, `tiger_ROI_manual/`). Switch with **Hemisphere lh · rh** in
+*Draw › Drawn labels* (or *Hemi* in the header). The line under it lists what
+the folder already holds on each side, and the label-name dropdown tags every
+name `lh ✓ · rh —`, so you can work down the list to mirror one side.
 
 ### Where drawn labels go: one folder per delineation step
 

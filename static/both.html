@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delineation Helper · Both hemispheres</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.8/build/index.module.js"
+    }
+  }
+  </script>
+</head>
+<body class="page-both">
+<header>
+  <button id="sidebar-toggle" title="hide the sidebar (\)">☰</button>
+  <strong>Delineation Helper · Both hemispheres</strong>
+  <nav class="pages" title="other views of the same data">
+    <a href="/" data-page="single">Single</a><a href="/both" data-page="both" class="on">Both</a><a href="/compare" data-page="compare">Compare</a><a href="/group" data-page="group">Group</a>
+  </nav>
+  <label>Subject
+    <button id="prev" title="previous subject (,)">◀</button><select id="sub"></select><button id="next" title="next subject (.)">▶</button></label>
+  <span id="status" class="dim"></span>
+  <button id="png" title="save the visible panels as a PNG">Save PNG</button>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Hemispheres</h2>
+      <div class="row">
+        <label><input type="checkbox" id="show-lh" checked> lh · left</label>
+        <label><input type="checkbox" id="show-rh" checked> rh · right</label>
+      </div>
+      <p class="hint">Untick one to see the other's medial side. On inflated the two are moved apart so they don't overlap; pial stays in brain space.</p>
+    </section>
+
+    <section>
+      <h2>Heatmap (both hemispheres)</h2>
+      <select id="heat"></select>
+      <label class="row">Threshold
+        <input type="range" id="thr" min="0" max="1" step="0.005" value="0.1">
+        <input type="number" id="thr-n" class="num" min="0" step="any" value="0.1"></label>
+      <label class="row">Opacity <input type="range" id="heat-alpha" min="0" max="1" step="0.05" value="0.85"></label>
+      <label class="row" title="below threshold the map fades out instead of disappearing (Taylor et al. 2026)"><input type="checkbox" id="heat-tt" checked> transparent threshold</label>
+      <label class="row"><input type="checkbox" id="heat-outline" checked> outline suprathreshold</label>
+      <div id="colorbar"><div class="bar"><span id="cb-mark" title="threshold"></span></div><div class="ticks"><span id="cb-lo"></span><span id="cb-mid"></span><span id="cb-hi"></span></div></div>
+      <p class="hint">One colour scale for both hemispheres: 0 → the larger of the two maxima.</p>
+    </section>
+
+    <section>
+      <h2>Labels A</h2>
+      <select id="folder-0" title="label folder, read for both hemispheres"></select>
+      <label class="row"><input type="checkbox" id="fill-0"> fill</label>
+      <ul id="names-0" class="list scroll"></ul>
+    </section>
+
+    <section>
+      <h2>Labels B</h2>
+      <select id="folder-1" title="label folder, read for both hemispheres"></select>
+      <label class="row"><input type="checkbox" id="fill-1"> fill</label>
+      <ul id="names-1" class="list scroll"></ul>
+    </section>
+
+    <section>
+      <h2>Labels C</h2>
+      <select id="folder-2" title="label folder, read for both hemispheres"></select>
+      <label class="row"><input type="checkbox" id="fill-2"> fill</label>
+      <ul id="names-2" class="list scroll"></ul>
+      <label class="row">fill opacity <input type="range" id="fill-alpha" min="0.05" max="1" step="0.05" value="0.6"></label>
+      <p class="hint">"label/ (flat)" is the subject's own label folder: atlas labels and the aparc.* regions. A is drawn under B, B under C. The number = hemispheres that have the label.</p>
+    </section>
+
+    <section>
+      <h2>View</h2>
+      <div id="surf-toggles"></div>
+      <label class="row"><input type="checkbox" id="link" checked> link cameras (rotate, zoom, pan)</label>
+      <label class="row"><input type="checkbox" id="cursor-on" checked> cursor (click to place)</label>
+      <label class="row"><input type="checkbox" id="curv-on" checked> curvature shading</label>
+      <div id="curv-opts" class="curv-opts"></div>
+      <div class="row wrap" id="views">
+        <button data-view="ventral">Ventral</button>
+        <button data-view="dorsal">Dorsal</button>
+        <button data-view="anterior">Anterior</button>
+        <button data-view="posterior">Posterior</button>
+        <button data-view="lateral" data-hemi="lh">Left</button>
+        <button data-view="lateral" data-hemi="rh">Right</button>
+      </div>
+      <p class="hint">Drag rotate · right-drag pan · wheel zoom · <kbd>,</kbd> <kbd>.</kbd> subject</p>
+    </section>
+  </aside>
+
+  <div id="stage">
+    <div id="viewers"></div>
+  </div>
+</main>
+
+<footer id="hover" class="dim">Loading…</footer>
+
+<script type="module" src="/static/both.js"></script>
+</body>
+</html>

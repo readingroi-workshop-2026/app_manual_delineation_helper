@@ -171,6 +171,11 @@ def create_app(config: dict) -> FastAPI:
     def compare_page() -> FileResponse:
         return FileResponse(STATIC / "index.html")
 
+    # One subject, lh + rh joined in each panel (inflated | pial); view only.
+    @app.get("/both")
+    def both_page() -> FileResponse:
+        return FileResponse(STATIC / "both.html")
+
     # Group view: one inflated surface per subject, 6 x 2, cameras linkable.
     @app.get("/group")
     def group_page() -> FileResponse:

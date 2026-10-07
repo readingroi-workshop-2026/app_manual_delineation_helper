@@ -20,7 +20,7 @@
   <button id="sidebar-toggle" title="hide the sidebar (\)">☰</button>
   <strong id="app-title">Delineation Helper</strong>
   <nav class="pages" title="other views of the same data">
-    <a href="/" data-page="single">Single</a><a href="/compare" data-page="compare">Compare</a><a href="/group" data-page="group">Group</a>
+    <a href="/" data-page="single">Single</a><a href="/both" data-page="both">Both</a><a href="/compare" data-page="compare">Compare</a><a href="/group" data-page="group">Group</a>
   </nav>
   <label>Subject
     <button id="prev" title="previous subject (,)">◀</button><select id="sub"></select><button id="next" title="next subject (.)">▶</button></label>
@@ -94,6 +94,14 @@
 
     <section>
       <h2>Drawn labels</h2>
+      <div class="row" title="the hemisphere you draw and save on (same as Hemi in the header)">
+        <span>Hemisphere</span>
+        <div class="seg small" id="draw-hemi">
+          <button data-hemi="lh">lh · left</button>
+          <button data-hemi="rh">rh · right</button>
+        </div>
+      </div>
+      <p class="hint" id="hemi-progress"></p>
       <label class="row" title="labels are saved to the subject's label/&lt;folder&gt;/; Enter to apply">Save to
         <span class="dim mono">label/</span><input id="draw-folder" class="mono"></label>
       <div class="row indent" title="your delineation folders (config: draw_label_folders) and the folders this subject already has">

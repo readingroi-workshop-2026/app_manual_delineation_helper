@@ -59,6 +59,13 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   `tiger_delineation_t-threshold` and `anat_label_tiger` were renamed to these
   three, and the three (empty) folders were created for every subject. Empty
   folders are not in git.
+- **Both page (`/both`, both.html + both.js).** lh and rh are JOINED into one
+  mesh per surface: rh's vertices follow lh's (`B.offset[h]`), faces shifted
+  by nL, every per-vertex array in that joined index; `local(vi)` maps back.
+  Inflated hemispheres overlap in space, so `build()` moves each sideways
+  (`GAP_MM`); pial is left as is. Label sets A/B/C go through the server
+  layers manual / compare / atlas with a `dir` override (FLAT = the subject's
+  label/). View only, no drawing.
 - **Three pages, one server.** `/` and `/compare` both serve `index.html`;
   `app.js` reads `location.pathname` (`PAGE`, `COMPARE`). `/group` is its own
   `group.html` + `group.js`. Header links `.pages` switch between them.
@@ -79,6 +86,12 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   different size frame alike). The echo back from the followers converges
   (identical state), no loop. Labels come from `label/<folder>/` through the
   `manual` layer with a `dir` override.
+- **Both hemispheres.** Labels are `<folder>/<hemi>.<name>.label`, one folder
+  for lh and rh. Draw › Drawn labels has a Hemisphere switch `#draw-hemi`
+  (same as the header Hemi: it reloads). `hemiStatus()` lists the Save-to
+  folder on the other hemisphere too, for the "Saved in …: lh … · rh …" line
+  and the name list's `lh ✓ · rh —` tags (`renderNameList()`). Name lists for
+  all three step folders are in `draw_label_names`.
 - **Navigate | Draw tabs.** `#tools` has Navigate and Draw; `#draw-tools`
   inside Draw has Contour / Brush / Erase (`setTool("draw")` returns to
   `S.lastDrawTool`). The heatmap section is Navigate-only. `setTool` toggles
@@ -96,6 +109,12 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   *View › Surface* picks inflated / pial (config `surfaces`).
   Opacity / mesh / x-ray (`G.look`) are applied by `applyLook()` to every
   panel and again after each panel load (a surface switch makes new viewers).
+- **aparc regions in label/ (2026-10-07).** For every subject and both
+  hemispheres, `<hemi>.aparc.<ABBR>.label` (IOG, AOS, MOG, FG, OTS, ITG) were
+  extracted from `<hemi>.aparc.a2009s.annot` (G_and_S_occipital_inf,
+  S_occipital_ant, G_occipital_middle, G_oc-temp_lat-fusifor, S_oc-temp_lat,
+  G_temporal_inf; white coords). They list in Atlas labels; `colorFor` drops
+  the `aparc.` prefix to take the aparc colour from `ANAT_COLORS`.
 - **Label colours**: landmarks by exact name from `ANAT_COLORS`
   (`utils/discovery.py`; aparc.a2009s colours for FG, IOG, ITG, MOG, OTS;
   maintainer's MFS green, PON cyan -- not in aparc), then word ROIs by

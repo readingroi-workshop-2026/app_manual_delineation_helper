@@ -64,7 +64,7 @@ function colorFor(s, name) {
   const k = `${s}:${name}`;
   if (!G.colors[k]) {
     const low = name.toLowerCase();
-    const anat = G.session.anat_colors?.[low];   // landmarks: exact name, aparc colours
+    const anat = G.session.anat_colors?.[low.replace(/^aparc\./, "")];   // landmarks: exact name, aparc colours
     const roi = Object.entries(G.session.roi_colors).find(([r]) => low.includes(r));
     const pal = G.session.cluster_colors;
     G.colors[k] = hexRgb(anat || (roi ? roi[1] : pal[paletteNext++ % pal.length]));

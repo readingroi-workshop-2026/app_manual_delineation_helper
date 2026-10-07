@@ -168,6 +168,7 @@ def test_compare_and_group_pages(dataset):
     assert r.status_code == 200 and 'id="compare-folder"' in r.text
     assert r.headers["cache-control"] == "no-cache"
     assert "group.js" in c.get("/group").text
+    assert "both.js" in c.get("/both").text
     assert c.get("/static/group.js").status_code == 200
 
 
@@ -202,6 +203,16 @@ def test_drawn_labels_save_and_reload(dataset):
     assert c.get(url, params={"folder": "my_draw"}).json()["labels"] == {"mFus-words": [1, 3, 7]}
     # The new folder is offered as a panel-4 source.
     assert "my_draw" in c.get("/api/sub-01/lh/meta").json()["label_folders"]
+
+
+def test_drawn_labels_per_hemisphere(dataset):
+    root, c = dataset
+    folder = root / "freesurfer-with_t2" / "sub-01" / "label" / "tiger_anat_landmark"
+    c.post("/api/sub-01/lh/drawn", json={"folder": "tiger_anat_landmark", "name": "FG", "vertices": [1, 2]})
+    c.post("/api/sub-01/rh/drawn", json={"folder": "tiger_anat_landmark", "name": "FG", "vertices": [4]})
+    assert (folder / "lh.FG.label").is_file() and (folder / "rh.FG.label").is_file()
+    get = lambda h: c.get(f"/api/sub-01/{h}/drawn", params={"folder": "tiger_anat_landmark"}).json()["labels"]  # noqa: E731
+    assert get("lh") == {"FG": [1, 2]} and get("rh") == {"FG": [4]}
 
 
 def test_drawn_label_delete(dataset):

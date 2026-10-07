@@ -47,8 +47,9 @@ ROI_COLORS = {
     "mog": "#9a6324",   # brown
 }
 
-# Anatomical landmarks (tiger_anat_landmark): matched by EXACT name (case-
-# insensitive), before ROI_COLORS -- so "MOG" takes the atlas colour while
+# Anatomical landmarks (tiger_anat_landmark) and the regions extracted from
+# aparc.a2009s (<hemi>.aparc.<ABBR>.label in label/): matched by EXACT name,
+# case-insensitive, an "aparc." prefix ignored, before ROI_COLORS -- so "MOG" takes the atlas colour while
 # "MOG-words" keeps its ROI colour. Colours from FreeSurfer's aparc.a2009s
 # (Destrieux) colour table where the structure exists there; MFS and PON
 # are not parcellated in aparc, colours set by the maintainer.
@@ -58,6 +59,7 @@ ANAT_COLORS = {
     "itg": "#dcdc64",   # G_temporal_inf          (220, 220, 100)
     "mog": "#b43cb4",   # G_occipital_middle      (180, 60, 180)
     "ots": "#dd8c14",   # S_oc-temp_lat           (221, 140, 20)
+    "aos": "#3d14b4",   # S_occipital_ant         (61, 20, 180)
     "mfs": "#00c800",   # mid-fusiform sulcus: not in aparc -> green
     "pon": "#00c8c8",   # preoccipital notch: not in aparc -> cyan
 }

@@ -38,10 +38,10 @@ heatmap_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/
 clusters_dir: autoROI/individual/analysis-27_5ses_VOTC_IMOG_1.5T_real_height0.15/{sub}/labels
 
 # Layer 3 — FreeSurfer / atlas labels and annots shipped with the recon
-# (lh.*.label, lh.*.annot). Its sub-folders are offered as layer-4 sources.
+# (<hemi>.*.label, <hemi>.*.annot). Its sub-folders are offered as layer-4 sources.
 atlas_label_dir: freesurfer-with_t2/{sub}/label
 
-# Layer 4 — user-defined manual labels (lh.*.label)
+# Layer 4 — user-defined manual labels (<hemi>.*.label)
 manual_label_dir: freesurfer-with_t2/{sub}/label/tiger_delineation
 
 # Compare page (/compare): layer 4 above is the REFERENCE (top row); this
@@ -63,5 +63,9 @@ draw_label_folders: [tiger_ROI_auto, tiger_ROI_manual, tiger_anat_landmark]
 
 # Label-name suggestions in the "Label name" box, per Save-to folder. A folder
 # not listed here suggests the word-ROI names (mFus-words, ...).
+# Same names on both hemispheres: lh.FG.label and rh.FG.label (the page's
+# Hemisphere switch / header Hemi picks which one is drawn and saved).
 draw_label_names:
   tiger_anat_landmark: [FG, IOG, ITG, MFS, PON, OTS, MOG]
+  tiger_ROI_auto: [LOC-words, IOG-words, PON-words, pOTS-words, mOTS-words, mFus-words]
+  tiger_ROI_manual: [LOC-words, IOG-words, PON-words, pOTS-words, mOTS-words, mFus-words]
