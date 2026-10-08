@@ -192,6 +192,14 @@ input[type=range] { min-width: 0; }
 .heat-badge .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
   font-variant-numeric: tabular-nums; }
 
+/* colour bars built by renderBar() (sidebar and panel badges) */
+.cbar { margin-top: 4px; }
+.cbar .bar { position: relative; height: 10px; border-radius: 3px;
+  background: linear-gradient(90deg, rgb(190,25,0), rgb(255,120,0), rgb(255,235,60)); }
+.cbar .ticks { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.cbar .cb-mark { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: #fff; }
+
 /* page switcher in the header */
 .pages { display: flex; gap: 2px; }
 .pages a { padding: 2px 8px; border-radius: 4px; color: var(--dim); text-decoration: none; background: var(--btn); }

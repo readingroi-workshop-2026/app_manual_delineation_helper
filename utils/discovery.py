@@ -39,6 +39,7 @@ CLUSTER_COLORS = [
 # Matched case-insensitively as a substring of the label name.
 ROI_COLORS = {
     "mfus": "#f58231",  # orange
+    "pfus": "#bfef45",  # lime (face ROI, pFus-faces)
     "mots": "#3cb44b",  # green
     "pots": "#e6194b",  # red
     "pon": "#4363d8",   # blue

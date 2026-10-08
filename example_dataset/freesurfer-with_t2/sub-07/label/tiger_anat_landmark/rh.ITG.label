@@ -1,4 +1,4 @@
-#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=ITG coords=white from=aparc.a2009s:G_temporal_inf
+#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=ITG coords=white drawn-with=delineation-helper-0.1.0
 1981
 25036  55.020  -57.189  -5.003 0.0000000000
 25907  55.587  -55.511  0.381 0.0000000000

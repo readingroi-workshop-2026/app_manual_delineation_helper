@@ -59,7 +59,8 @@ draw_label_dir: tiger_ROI_auto
 #   tiger_ROI_auto       ROIs from the auto clusters (e.g. RWvsAllNotext_score)
 #   tiger_ROI_manual     ROIs from a t-threshold map (e.g. RWvsAllNotext_mean_raw)
 #   tiger_anat_landmark  anatomical landmarks drawn by hand
-draw_label_folders: [tiger_ROI_auto, tiger_ROI_manual, tiger_anat_landmark]
+#   tiger_face_ROI_auto  face ROIs (IOG, pFus, mFus -faces), lh and rh
+draw_label_folders: [tiger_ROI_auto, tiger_ROI_manual, tiger_anat_landmark, tiger_face_ROI_auto]
 
 # Label-name suggestions in the "Label name" box, per Save-to folder. A folder
 # not listed here suggests the word-ROI names (mFus-words, ...).
@@ -69,3 +70,4 @@ draw_label_names:
   tiger_anat_landmark: [FG, IOG, ITG, MFS, PON, OTS, MOG]
   tiger_ROI_auto: [LOC-words, IOG-words, PON-words, pOTS-words, mOTS-words, mFus-words]
   tiger_ROI_manual: [LOC-words, IOG-words, PON-words, pOTS-words, mOTS-words, mFus-words]
+  tiger_face_ROI_auto: [IOG-faces, pFus-faces, mFus-faces]

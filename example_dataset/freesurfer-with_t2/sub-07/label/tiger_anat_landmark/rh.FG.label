@@ -1,4 +1,4 @@
-#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=FG coords=white from=aparc.a2009s:G_oc-temp_lat-fusifor
+#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=FG coords=white drawn-with=delineation-helper-0.1.0
 2155
 17927  31.946  -63.015  -10.374 0.0000000000
 17928  31.457  -63.709  -11.114 0.0000000000

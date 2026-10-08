@@ -76,7 +76,10 @@ class MinHeap {
 }
 
 // Shortest edge path src -> dst (inclusive), weighted by edge length on `coords`.
-export function shortestPath(adj, coords, src, dst) {
+// `cost` (optional, per vertex): an edge into vertex w costs length * cost[w],
+// e.g. 1 inside a thresholded map and much more outside it, so the path keeps
+// to the map where it can and still connects when it can't.
+export function shortestPath(adj, coords, src, dst, cost = null) {
   if (src === dst) return [src];
   const d = new Float64Array(adj.n).fill(Infinity);
   const prev = new Int32Array(adj.n).fill(-1);
@@ -89,7 +92,7 @@ export function shortestPath(adj, coords, src, dst) {
     const du = d[u];
     for (let j = adj.off[u]; j < adj.off[u + 1]; j++) {
       const w = adj.nbr[j];
-      const nd = du + dist(coords, u, w);
+      const nd = du + dist(coords, u, w) * (cost ? cost[w] : 1);
       if (nd < d[w]) { d[w] = nd; prev[w] = u; heap.push(nd, w); }
     }
   }
@@ -100,12 +103,13 @@ export function shortestPath(adj, coords, src, dst) {
 }
 
 // Join control points with shortest paths; closed=true adds last -> first.
-export function tracePath(adj, coords, points, closed = false) {
+// `cost`: see shortestPath.
+export function tracePath(adj, coords, points, closed = false, cost = null) {
   if (points.length === 0) return [];
   const out = [points[0]];
   const hops = closed && points.length > 2 ? [...points, points[0]] : points;
   for (let i = 1; i < hops.length; i++) {
-    const seg = shortestPath(adj, coords, hops[i - 1], hops[i]);
+    const seg = shortestPath(adj, coords, hops[i - 1], hops[i], cost);
     if (!seg) continue;
     for (let j = 1; j < seg.length; j++) out.push(seg[j]);
   }

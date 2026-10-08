@@ -33,6 +33,18 @@ test("shortest path follows the diagonal edges", () => {
   assert.deepEqual(p, [0, 1, 2, 3, 4].map((i) => g.id(i, i)));
 });
 
+test("a per-vertex cost keeps the path inside a map (an L-shaped corridor)", () => {
+  const g = grid(6, 6);
+  const adj = M.buildAdjacency(g.faces, g.n);
+  // Cheap only along the left column and the top row: the path must turn the corner.
+  const cost = new Float32Array(g.n).fill(100);
+  for (let k = 0; k < 6; k++) { cost[g.id(0, k)] = 1; cost[g.id(k, 5)] = 1; }
+  const p = M.shortestPath(adj, g.coords, g.id(0, 0), g.id(5, 5), cost);
+  assert.ok(p.every((v) => cost[v] === 1));
+  // Without the cost it cuts straight across the diagonal.
+  assert.ok(M.shortestPath(adj, g.coords, g.id(0, 0), g.id(5, 5)).some((v) => cost[v] !== 1));
+});
+
 test("closed contour fills the inside, not the larger outside", () => {
   const g = grid(12, 12);
   const adj = M.buildAdjacency(g.faces, g.n);

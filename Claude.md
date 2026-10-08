@@ -54,7 +54,9 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   `fillFolderPick()` from the session list + the subject's own folders):
   `tiger_ROI_auto` (ROIs from the auto clusters, e.g. RWvsAllNotext_score),
   `tiger_ROI_manual` (ROIs from a t-threshold map, e.g. RWvsAllNotext_mean_raw),
-  `tiger_anat_landmark` (anatomical landmarks by hand). `draw_label_dir` is the
+  `tiger_anat_landmark` (anatomical landmarks by hand); since 2026-10-08 also
+  `tiger_face_ROI_auto` (face ROIs IOG-faces, pFus-faces, mFus-faces; pFus lime
+  in `ROI_COLORS`). `draw_label_dir` is the
   start folder. On 2026-10-05 sub-02's `tiger_delineation_autocluster`,
   `tiger_delineation_t-threshold` and `anat_label_tiger` were renamed to these
   three, and the three (empty) folders were created for every subject. Empty
@@ -78,6 +80,11 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   config `compare_label_dir`), listed / served like `manual`. `tickAll()`
   ticks every label of both folders on listing; `rowTags()` names rows after
   their folders.
+- **Per-row heatmap (compare page).** `S.heat2` / `S.heat2Name` (`SAME` =
+  follow the top row, "" = none). `rowHeat(row)` picks the map `paint(out,
+  row)` uses; thresholds are per map name (`thrOf`), so one map has one
+  threshold in both rows. `renderBar(el, heat)` draws every colour bar
+  (sidebar, `#colorbar2`, panel badges). Fill from seed uses the top map.
 - **Group page = one SurfaceViewer per panel** (subjects have different
   meshes; 12 WebGL contexts, browsers allow ~16). Linking is done in
   `group.js`, not the engine: the engine's `onCamera(v)` hook fires on every
@@ -160,6 +167,20 @@ pipeline and follow the analysis-script conventions; the viewer does not.
   A seed below the bound snaps to the nearest passing vertex within `SNAP_MM`
   (3 mm, on pial) -- transparent thresholding draws the sub-threshold rim, so
   people click it.
+- **Curvature-guided path.** `mesh.shortestPath/tracePath(..., cost)` take a
+  per-vertex cost (edge length × cost[w]). `pathCost()` makes it from `S.curv`
+  as a threshold map (`S.pathCurv` sulci: curv > thr / gyri: curv < −thr; pass
+  = 1, else `OFF_MAP_COST` 50): a soft constraint, so the path stays on the map
+  where a route exists and still connects across gaps (reported in the status
+  line). The map is tinted in Contour (`S.pathCurvShow`).
+- **Removing a region from a label.** `layerOp()` (Draw › "With a shown
+  layer label", `#op-layer`, filled from the shown labels by `fillOpLayer()`
+  on every `renderLegend()`) subtracts / intersects a whole layer label: the
+  dependable way to do IOG minus aparc.AOS. The click route: `regionAt()`
+  returns ONE label, the smallest containing the seed (it used to OR every
+  label there, so a remove took too much); in remove mode the flood is bounded
+  by the active label; `setClickMode("fill")` ticks the heatmap bound only in
+  add mode.
 - **Cutting a region with a path.** With "up to and including the path" the
   wall is the path EXACTLY as drawn, i.e. OPEN (`contourPath(false)`). It used
   to be closed last -> first once it had 3 points, which cut a big region a

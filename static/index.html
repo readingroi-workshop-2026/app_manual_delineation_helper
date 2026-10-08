@@ -61,6 +61,18 @@
         </div>
       </div>
       <label class="row">Path follows <select id="path-surface"></select></label>
+      <label class="row" title="treat curvature as a threshold map: between two clicks the path keeps to the vertices that pass, and leaves them only where there is no route inside">Path stays on
+        <select id="path-curv">
+          <option value="any">anywhere (shortest)</option>
+          <option value="sulci">sulci: curv &gt; threshold</option>
+          <option value="gyri">gyri: curv &lt; −threshold</option>
+        </select></label>
+      <div id="path-curv-opts">
+        <label class="row indent">threshold
+          <input type="range" id="path-curv-thr" min="0" max="0.5" step="0.01" value="0">
+          <output id="path-curv-out">0.00</output></label>
+        <label class="row indent"><input type="checkbox" id="path-curv-show" checked> show the map (blue tint)</label>
+      </div>
       <label class="row"><input type="checkbox" id="seed-fill"> on Enter, click to pick the inside</label>
       <label class="row" title="where a gyrus hides the path, draw that stretch dim and dashed"><input type="checkbox" id="show-hidden" checked> show hidden path (dashed)</label>
       <p class="hint">Click to add points · <kbd>Tab</kbd> switch head/tail ·
@@ -122,6 +134,14 @@
         <button id="erode" title="shrink by one ring of vertices">Erode</button>
         <button id="clear">Clear</button>
       </div>
+      <h3>With a shown layer label</h3>
+      <div class="row" title="labels ticked in Navigate (atlas, aparc.*, manual, clusters)">
+        <select id="op-layer"></select>
+      </div>
+      <div class="row wrap">
+        <button id="op-remove" title="take every vertex of that label out of the active label (e.g. IOG minus aparc.AOS)">− Remove it from active</button>
+        <button id="op-keep" title="keep only the active label's vertices that lie inside that label">∩ Keep only inside it</button>
+      </div>
       <label class="row">fill opacity
         <input type="range" id="draw-alpha" min="0" max="1" step="0.05" value="0.45"></label>
       <p class="hint" id="draw-out"></p>
@@ -133,6 +153,7 @@
     <section>
       <h2>1 · Heatmap</h2>
       <input class="dir" data-kind="heatmap" title="*.func.gii folder; {sub} = subject; Enter to apply">
+      <h3 class="compare-only">Top row</h3>
       <select id="heat"></select>
       <label class="row">Threshold
         <input type="range" id="thr" min="0" max="1" step="0.001" value="0.1">
@@ -142,7 +163,16 @@
       <label class="row" title="Taylor, Aggarwal & Bandettini (2026) Go figure: transparency in neuroscience images preserves context and clarifies interpretation. Nature Methods. doi:10.1038/s41592-026-03206-7"><input type="checkbox" id="heat-tt" checked> transparent threshold
         <a class="cite" href="https://doi.org/10.1038/s41592-026-03206-7" target="_blank" rel="noopener">Taylor et al. 2026</a></label>
       <label class="row indent" title="outline the vertices above the threshold, as the paper recommends"><input type="checkbox" id="heat-outline" checked> outline suprathreshold</label>
-      <div id="colorbar"><div class="bar"><span id="cb-mark" title="threshold"></span></div><div class="ticks"><span id="cb-lo"></span><span id="cb-mid"></span><span id="cb-hi"></span></div></div>
+      <div id="colorbar" class="cbar"></div>
+      <div class="compare-only">
+        <h3>Bottom row</h3>
+        <select id="heat2" title="the bottom row's map; &quot;same as top&quot; follows the top row"></select>
+        <label class="row" id="thr2-row">Threshold
+          <input type="range" id="thr2" min="0" max="1" step="0.001" value="0.1">
+          <input type="number" id="thr2-n" step="any" class="num"></label>
+        <div id="colorbar2" class="cbar"></div>
+        <p class="hint">Opacity, transparent threshold and outline apply to both rows. Fill from seed (Draw) uses the top row's map.</p>
+      </div>
       <p class="hint" id="tt-hint">Below threshold the map is not hidden: it fades out quadratically toward 0, so the context of each cluster stays visible.</p>
     </section>
 

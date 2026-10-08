@@ -140,6 +140,9 @@ same config):
   `compare_label_dir`). Every label of both folders is ticked when listed;
   the top row shows ONLY the reference folder, the bottom row ONLY the
   compared one. The page opens without a heatmap (pick one in Navigate).
+  Each row can show its own map: *1 · Heatmap › Bottom row* is "same as
+  top" by default, or any other map (or none), with its own threshold; each
+  panel's badge names the map it shows.
   Pick either folder in the Navigate tab; **⇅ swap rows** exchanges them.
   The heatmap, auto clusters, atlas labels and the cursor show in all four
   panels, all four cameras move together, and drawing (Contour / Brush /
@@ -215,6 +218,29 @@ A click just outside the blob, e.g. on the faded below-threshold rim that transp
 thresholding shows, **snaps to the nearest vertex above the threshold within 3 mm**. The
 status line says so. A click farther away says why nothing was filled. A leftover path with
 *up to and including the path* ticked acts as a border: press <kbd>Esc</kbd> to clear it.
+
+### Drawing a line along a sulcus or gyrus (curvature as a threshold map)
+
+Contour › *Path stays on*: **sulci: curv > threshold** or **gyri: curv <
+−threshold**, with a threshold slider (0–0.5). The vertices that pass are tinted
+blue while you draw. Between two clicks the path keeps to the tinted vertices,
+so two clicks at the ends of a sulcus trace its fundus; where no route stays
+inside, it crosses the gap and the status line says how many path vertices
+are off the map. Raise the threshold for a thinner line nearer the fundus /
+crown; *anywhere* is the plain shortest route.
+
+### Taking a region out of a label (e.g. IOG minus AOS)
+
+Tick the region in Navigate (e.g. *3 · Atlas labels › aparc.AOS*), then in
+Draw › Drawn labels › *With a shown layer label* pick it and press
+**− Remove it from active** (or **∩ Keep only inside it**). The whole label is
+taken out in one step (⌘Z undoes it): no flood, no heatmap bound.
+
+By clicking instead: Contour, *Fills: remove*, *Click: fills from seed*, tick
+*inside the clicked layer label / region*, click on the region. When several
+shown labels overlap at the click, the fill is bounded by the SMALLEST one (the
+status line names it), and a remove only floods within the active label. In
+remove mode the heatmap bound is no longer ticked for you.
 
 ### Cutting a big region in two with a path
 

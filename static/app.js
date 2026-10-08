@@ -21,6 +21,7 @@ const CUSTOM = "__custom__";
 const PAGE = location.pathname.replace(/\/+$/, "") === "/compare" ? "compare" : "single";
 const COMPARE = PAGE === "compare";
 const LABEL_KINDS = ["atlas", "manual", "compare"];   // folder-of-labels layers
+const SAME = "__same__";   // compare page: bottom-row heatmap = the top row's
 
 const S = {
   session: null, meta: null,
@@ -29,6 +30,8 @@ const S = {
   cursorV: -1,
   templates: {},        // layer -> folder template ({sub} allowed)
   heat: null,           // {name, values, min, max}
+  heat2: null,          // compare page: the bottom row's own map (when heat2Name is a map)
+  heat2Name: SAME,      // SAME = the bottom row follows the top row; "" = none
   heatAlpha: 0.85,
   heatTT: true,         // transparent thresholding (Taylor et al. 2026), see paintHeat
   heatOutline: true,    // outline the suprathreshold vertices
@@ -43,6 +46,7 @@ const S = {
   coords: {},           // surface name -> Float32Array, for paths and the brush
   tool: "navigate", drawMode: "add", clickMode: "path", radius: 2,
   seedFill: false, showHidden: true, pathSurface: null,
+  pathCurv: "any", pathCurvThr: 0, pathCurvShow: true,   // curvature as the path's threshold map
   contour: { points: [], cursor: "tail", awaitingSeed: null, path: [] },
   drawFolder: "", drawDir: "",
   drawn: new Map(),     // name -> {mask, visible, dirty}; colours via colorFor("drawn", name)
@@ -138,7 +142,13 @@ function drawRow() {
 function paint(out, row = 0) {
   const n = S.n;
   paintCurvature(out, S.curv, n, S.curvOn, S.curvOpts);
-  if (S.heat) paintHeat(out);
+  // The path's curvature map, while drawing a contour.
+  if (S.tool === "contour" && S.pathCurvShow && pathCost()) {
+    const pass = costCache.pass;
+    for (let i = 0; i < n; i++) if (pass[i]) blend(out, i, [70, 160, 255], 0.35);
+  }
+  const heat = rowHeat(row);
+  if (heat) paintHeat(out, heat);
   // Layer order: clusters, then atlas (annots under labels), then manual /
   // compare -- the reference labels only in the top row, compared ones below.
   for (const kind of KINDS) {
@@ -186,9 +196,9 @@ function paint(out, row = 0) {
 // value (0 -> max), keep suprathreshold vertices opaque and outlined, and let
 // subthreshold ones fade out quadratically, opacity (v / thr)^2. Unticked, the
 // map is the classic hard cut: only v > thr, coloured from thr to max.
-function paintHeat(out) {
-  const { values, max } = S.heat;
-  const n = S.n, thr = currentThreshold();
+function paintHeat(out, heat) {
+  const { values, max } = heat;
+  const n = S.n, thr = thrOf(heat);
   if (S.heatTT) {
     for (let i = 0; i < n; i++) {
       const v = values[i];
@@ -237,6 +247,9 @@ function describe(vi, surfs) {
   }
   if (S.curv) parts.push(`curv ${S.curv[vi].toFixed(3)}`);
   if (S.heat) parts.push(`${S.heat.name}: ${S.heat.values[vi].toFixed(3)}`);
+  if (COMPARE && S.heat2Name !== SAME && S.heat2 && S.heat2.name !== S.heat?.name) {
+    parts.push(`bottom ${S.heat2.name}: ${S.heat2.values[vi].toFixed(3)}`);
+  }
   for (const it of S.items.values()) {
     if (!it.on || it.hidden) continue;
     if (it.type === "annot") {
@@ -340,7 +353,29 @@ function paintAt(v, vi) {
   view.requestColor();
 }
 
-const contourPath = (closed) => M.tracePath(S.adj, S.coords[S.pathSurface], S.contour.points, closed);
+const contourPath = (closed) => M.tracePath(S.adj, S.coords[S.pathSurface], S.contour.points, closed, pathCost());
+
+// Curvature as a threshold map for the path: "sulci" passes curv > thr,
+// "gyri" curv < -thr (FreeSurfer: sulci positive). Passing vertices cost 1,
+// the rest OFF_MAP_COST, so the shortest route keeps to the map wherever one
+// exists and still connects (and is reported) where it can't.
+const OFF_MAP_COST = 50;
+let costCache = null;
+function curvPass() {
+  if (S.pathCurv === "any" || !S.curv) return null;
+  const t = S.pathCurvThr, c = S.curv;
+  return S.pathCurv === "sulci" ? Uint8Array.from(c, (x) => (x > t ? 1 : 0))
+                                : Uint8Array.from(c, (x) => (x < -t ? 1 : 0));
+}
+function pathCost() {
+  if (S.pathCurv === "any" || !S.curv) return null;
+  const k = `${S.sub}|${S.hemi}|${S.pathCurv}|${S.pathCurvThr}`;
+  if (costCache?.k !== k) {
+    const pass = curvPass();
+    costCache = { k, pass, cost: Float32Array.from(pass, (p) => (p ? 1 : OFF_MAP_COST)) };
+  }
+  return costCache.cost;
+}
 
 function updateContour() {
   const path = contourPath(false);
@@ -355,8 +390,14 @@ function updateContour() {
   const n = pts.length;
   const cutHint = n >= 2 && S.clickMode === "path" && $("c-path").checked && !S.contour.awaitingSeed
     ? " — to cut a region: run both ends past its edge, press F, click the side to fill" : "";
+  let offMap = "";
+  if (n >= 2 && pathCost()) {
+    const pass = costCache.pass, off = path.filter((v) => !pass[v]).length;
+    offMap = off ? ` — ${off} of ${path.length} path vertices are off the ${S.pathCurv} map (no route inside there)`
+                 : ` — on the ${S.pathCurv} map all the way`;
+  }
   if (n) status(`Path: ${n} point${n > 1 ? "s" : ""}, adding at ${S.contour.cursor}` +
-                (S.contour.awaitingSeed ? " — click inside the region" : cutHint));
+                (S.contour.awaitingSeed ? " — click inside the region" : cutHint) + offMap);
 }
 
 function closeContour() {
@@ -405,24 +446,24 @@ function valueMask() {
   return ok;
 }
 
-// Every shown layer label containing `seed`, and the seed's region of every
-// shown annot, as one 0/1 mask (null when the seed is in none of them).
+// The ONE shown layer label (or annot region) containing `seed`: the smallest
+// when several overlap there -- e.g. a click where a reference IOG and
+// aparc.AOS overlap picks aparc.AOS, not both (their union used to be the
+// bound, so a remove took out too much). {mask, name}, or null.
 function regionAt(seed) {
-  const ok = new Uint8Array(S.n);
-  let found = false;
+  let best = null;
+  const offer = (mask, size, name) => { if (!best || size < best.size) best = { mask, size, name }; };
   for (const it of S.items.values()) {
     if (!it.on || it.hidden) continue;
-    if (it.type === "label" && it.mask[seed]) {
-      for (const i of it.verts) ok[i] = 1;
-      found = true;
-    } else if (it.type === "annot") {
+    if (it.type === "label" && it.mask[seed]) offer(it.mask, it.verts.length, it.name);
+    else if (it.type === "annot") {
       const k = it.labels[seed];
       if (k < 0 || !it.regions[k]) continue;
-      for (let i = 0; i < S.n; i++) if (it.labels[i] === k) ok[i] = 1;
-      found = true;
+      const m = Uint8Array.from(it.labels, (x) => (x === k ? 1 : 0));
+      offer(m, m.reduce((a, b) => a + b, 0), `${it.name}: ${it.names[k]}`);
     }
   }
-  return found ? ok : null;
+  return best;
 }
 
 // FreeView's custom fill: flood from the clicked vertex, bounded by the ticked
@@ -433,10 +474,17 @@ function seedFill(seed) {
   let allowed;
   try { allowed = valueMask() || new Uint8Array(S.n).fill(1); }
   catch (e) { status(`Fill: ${e.message}`, true); return; }
+  let inside = "";
   if ($("c-inside").checked) {
     const region = regionAt(seed);
     if (!region) { status("Fill: the click is not inside a shown layer label or annot region", true); return; }
-    for (let i = 0; i < S.n; i++) allowed[i] &= region[i];
+    for (let i = 0; i < S.n; i++) allowed[i] &= region.mask[i];
+    inside = ` inside ${region.name}`;
+  }
+  // Removing can only take away what the active label has: bound the flood by it.
+  if (S.drawMode === "remove" && S.active) {
+    const m = S.drawn.get(S.active).mask;
+    for (let i = 0; i < S.n; i++) allowed[i] &= m[i];
   }
   if ($("c-others").checked) {
     for (const [name, l] of S.drawn) {
@@ -492,8 +540,30 @@ function seedFill(seed) {
     status("Fill cancelled");
     return;
   }
-  applyFill(fill, `Fill from vertex ${seed}${snapped}`);
+  applyFill(fill, `Fill from vertex ${seed}${inside}${snapped}`);
   if (leak) status($("status").textContent + leak, true);
+}
+
+// Set operations with a shown layer label: the reliable way to e.g. take
+// aparc.AOS out of a drawn IOG -- the whole label, no flood, no map bound.
+function shownLayerLabels() {
+  return [...S.items.values()].filter((it) => it.on && !it.hidden && it.type === "label");
+}
+function fillOpLayer() {
+  const sel = $("op-layer"), keep = sel.value;
+  const items = shownLayerLabels();
+  sel.innerHTML = items.length
+    ? items.map((it) => `<option value="${esc(key(it.kind, it.name))}">${esc(it.name)} (${it.kind}, ${it.verts.length} v)</option>`).join("")
+    : `<option value="">tick a label in Navigate first</option>`;
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+function layerOp(op) {
+  if (!S.active) { status("Add or pick a label first", true); return; }
+  const it = S.items.get($("op-layer").value);
+  if (!it) { status("Tick the label in Navigate (e.g. 3 · Atlas labels › aparc.AOS), then pick it here", true); return; }
+  const m = S.drawn.get(S.active).mask;
+  const out = op === "remove" ? m.map((x, i) => (x && !it.mask[i] ? 1 : 0)) : m.map((x, i) => (x && it.mask[i] ? 1 : 0));
+  setMask(out, op === "remove" ? `Remove ${it.name}` : `Keep only inside ${it.name}`);
 }
 
 // ---------------------------------------------------------------- drawn labels
@@ -724,20 +794,59 @@ async function afterSave(names) {
 }
 
 // ---------------------------------------------------------------- heatmap
-function currentThreshold() {
-  return S.heat ? (S.thresholds[S.heat.name] ?? Math.min(0.1, S.heat.max)) : 0;
+// A map's threshold, kept per map name (so the same map has one threshold in
+// both rows of the compare page).
+const thrOf = (heat) => (heat ? (S.thresholds[heat.name] ?? Math.min(0.1, heat.max)) : 0);
+function currentThreshold() { return thrOf(S.heat); }
+
+// The map a row shows: the compare page's bottom row has its own (or none),
+// unless it is set to "same as top".
+function rowHeat(row) {
+  return COMPARE && row === 1 && S.heat2Name !== SAME ? S.heat2 : S.heat;
+}
+
+async function loadHeat(name) {
+  const values = await getBin(`${S.sub}/${S.hemi}/heatmap?${q({ name, dir: S.templates.heatmap })}`, Float32Array);
+  let min = Infinity, max = -Infinity;
+  for (const v of values) if (Number.isFinite(v)) { if (v < min) min = v; if (v > max) max = v; }
+  return { name, values, min, max: Math.max(max, 1e-6) };
+}
+
+// Compare page, bottom row: SAME, "" (none) or a map name.
+async function setHeatmap2(name) {
+  S.heat2Name = name;
+  S.heat2 = null;
+  if (name && name !== SAME) {
+    try { S.heat2 = await loadHeat(name); } catch (e) { status(`Bottom-row heatmap failed — ${e.message}`, true); }
+  }
+  syncHeat2();
+  heatBadges();
+  view.requestColor();
+}
+
+function syncHeat2() {
+  if (!COMPARE) return;
+  const own = S.heat2Name !== SAME ? S.heat2 : null;
+  $("thr2-row").hidden = !own;
+  $("colorbar2").hidden = !own;
+  if (!own) return;
+  const thr = thrOf(own), step = Math.max(own.max / 200, 1e-4);
+  Object.assign($("thr2"), { min: 0, max: own.max, step, value: thr });
+  Object.assign($("thr2-n"), { min: 0, max: own.max, step, value: +thr.toPrecision(4) });
+  renderBar($("colorbar2"), own);
+}
+
+function setThreshold2(t) {
+  if (!S.heat2) return;
+  S.thresholds[S.heat2.name] = Math.min(Math.max(+t || 0, 0), S.heat2.max);
+  syncThresholdWidgets();   // the top row may show the same map
+  view.requestColor();
 }
 
 async function setHeatmap(name) {
   S.heat = null;
   if (name) {
-    try {
-      const values = await getBin(`${S.sub}/${S.hemi}/heatmap?${q({ name, dir: S.templates.heatmap })}`,
-                                  Float32Array);
-      let min = Infinity, max = -Infinity;
-      for (const v of values) if (Number.isFinite(v)) { if (v < min) min = v; if (v > max) max = v; }
-      S.heat = { name, values, min, max: Math.max(max, 1e-6) };
-    } catch (e) { status(`Heatmap failed — ${e.message}`, true); }
+    try { S.heat = await loadHeat(name); } catch (e) { status(`Heatmap failed — ${e.message}`, true); }
   }
   syncThresholdWidgets();
   view.requestColor();
@@ -751,16 +860,17 @@ function syncThresholdWidgets() {
   for (const id of ["c-thr-r", "c-thr-n"]) $(id).disabled = !on;
   $("c-map").textContent = on ? S.heat.name : "none — pick one in Navigate › 1 · Heatmap";
   $("colorbar").style.visibility = on ? "" : "hidden";
-  if (!on) { heatBadges(); return; }
+  if (!on) { syncHeat2(); heatBadges(); return; }
   const thr = currentThreshold();
   const step = Math.max(S.heat.max / 200, 1e-4);
   Object.assign($("thr"), { min: 0, max: S.heat.max, step, value: thr });
   Object.assign($("thr-n"), { min: 0, max: S.heat.max, step, value: +thr.toPrecision(4) });
-  syncColorbar(thr);
+  syncColorbar();
   // The fill condition's own slider is a second handle on the same threshold.
   $("c-map").textContent = S.heat.name;
   Object.assign($("c-thr-r"), { min: 0, max: S.heat.max, step, value: thr });
   Object.assign($("c-thr-n"), { min: 0, max: S.heat.max, step, value: +thr.toPrecision(4) });
+  syncHeat2();
   heatBadges();
 }
 
@@ -768,45 +878,41 @@ function syncThresholdWidgets() {
 // the sidebar's #colorbar (same gradient, threshold tick and numbers), so the
 // map in view is named on the brain itself.
 function heatBadges() {
-  const src = $("colorbar");
-  for (const el of document.querySelectorAll("#viewers .viewer")) {
-    let b = el.querySelector(".heat-badge");
-    if (!S.heat) { b?.remove(); continue; }
-    if (!b) { b = document.createElement("div"); b.className = "heat-badge"; el.appendChild(b); }
-    const bar = src.querySelector(".bar"), mark = $("cb-mark");
-    b.innerHTML =
-      `<div class="hb-name" title="${esc(S.heat.name)}">${esc(S.heat.name)}</div>` +
-      `<div class="bar" style="background:${bar.style.background || ""}">` +
-      (mark.hidden ? "" : `<span class="hb-mark" style="left:${mark.style.left}"></span>`) + `</div>` +
-      `<div class="ticks"><span>${esc($("cb-lo").textContent)}</span><span>${esc($("cb-mid").textContent)}</span>` +
-      `<span>${esc($("cb-hi").textContent)}</span></div>`;
+  for (const v of view.viewers) {
+    const heat = rowHeat(v.row);
+    let b = v.el.querySelector(".heat-badge");
+    if (!heat) { b?.remove(); continue; }
+    if (!b) { b = document.createElement("div"); b.className = "heat-badge"; v.el.appendChild(b); }
+    b.innerHTML = `<div class="hb-name" title="${esc(heat.name)}">${esc(heat.name)}</div><div class="cbar"></div>`;
+    renderBar(b.querySelector(".cbar"), heat);
   }
 }
 
-// Hard threshold: the bar is thr -> max. Transparent: 0 -> max, faded below the
-// threshold the way the surface is, with a tick at the threshold.
-function syncColorbar(thr) {
-  const max = S.heat.max, fmt = (x) => `${+x.toPrecision(3)}`;
-  const bar = document.querySelector("#colorbar .bar");
+// A map's colour bar into `el`. Hard threshold: the bar is thr -> max.
+// Transparent: 0 -> max, faded below the threshold the way the surface is,
+// with a tick at the threshold.
+function renderBar(el, heat) {
+  const max = heat.max, thr = thrOf(heat), fmt = (x) => `${+x.toPrecision(3)}`;
+  let bg = "", mark = "", ticks = [fmt(thr), "", fmt(max)];
+  if (S.heatTT) {
+    const stops = [];
+    for (let k = 0; k <= 40; k++) {
+      const v = (k / 40) * max;
+      const a = v > thr ? 1 : (v / (thr || 1)) ** 2;
+      const [r, g, b] = heatColor(k / 40).map(Math.round);
+      stops.push(`rgba(${r},${g},${b},${a.toFixed(3)}) ${(k * 2.5).toFixed(1)}%`);
+    }
+    bg = `background:linear-gradient(90deg, ${stops.join(", ")}), #9a9a9a`;
+    mark = `<span class="cb-mark" title="threshold" style="left:${(100 * thr) / max}%"></span>`;
+    ticks = ["0", `thr ${fmt(thr)}`, fmt(max)];
+  }
+  el.innerHTML = `<div class="bar" style="${bg}">${mark}</div>` +
+    `<div class="ticks">${ticks.map((t) => `<span>${esc(t)}</span>`).join("")}</div>`;
+}
+
+function syncColorbar() {
   $("tt-hint").hidden = !S.heatTT;
-  if (!S.heatTT) {
-    bar.style.background = "";
-    $("cb-mark").hidden = true;
-    $("cb-lo").textContent = fmt(thr); $("cb-mid").textContent = ""; $("cb-hi").textContent = fmt(max);
-    return;
-  }
-  const stops = [];
-  for (let k = 0; k <= 40; k++) {
-    const v = (k / 40) * max;
-    const a = v > thr ? 1 : (v / (thr || 1)) ** 2;
-    const [r, g, b] = heatColor(k / 40).map(Math.round);
-    stops.push(`rgba(${r},${g},${b},${a.toFixed(3)}) ${(k * 2.5).toFixed(1)}%`);
-  }
-  bar.style.background = `linear-gradient(90deg, ${stops.join(", ")}), #9a9a9a`;
-  const mark = $("cb-mark");
-  mark.hidden = false;
-  mark.style.left = `${(100 * thr) / max}%`;
-  $("cb-lo").textContent = "0"; $("cb-mid").textContent = `thr ${fmt(thr)}`; $("cb-hi").textContent = fmt(max);
+  renderBar($("colorbar"), S.heat);
 }
 
 function setThreshold(t) {
@@ -960,6 +1066,9 @@ function renderHeatmaps() {
   document.querySelector(".dir[data-kind=heatmap]").classList.toggle("missing", !L.exists);
   $("heat").innerHTML = `<option value="">none</option>` +
     L.items.map((n) => `<option>${esc(n)}</option>`).join("");
+  $("heat2").innerHTML = `<option value="${SAME}">same as top</option><option value="">none</option>` +
+    L.items.map((n) => `<option>${esc(n)}</option>`).join("");
+  $("heat2").value = S.heat2Name === SAME || L.items.includes(S.heat2Name) || !S.heat2Name ? S.heat2Name : SAME;
 }
 
 function renderManualFolders() {
@@ -1014,6 +1123,7 @@ function legendGroups() {
 }
 
 function renderLegend() {
+  fillOpLayer();   // the Draw tab's "with a shown layer label" list follows what is shown
   const box = $("legend"), ul = $("legend-list");
   const groups = S.meta ? legendGroups() : [];
   box.hidden = !groups.length;
@@ -1132,6 +1242,12 @@ async function loadSubject() {
     const firstHeat = keepHeat ?? (COMPARE ? null : `${S.session.default_contrast}_score`);
     if (heatNames.includes(firstHeat)) { $("heat").value = firstHeat; await setHeatmap(firstHeat); }
     else syncThresholdWidgets();
+    // The bottom row's own map, re-read for this subject (same name).
+    if (COMPARE) {
+      const n2 = S.heat2Name === SAME || heatNames.includes(S.heat2Name) ? S.heat2Name : "";
+      $("heat2").value = n2;
+      await setHeatmap2(n2);
+    }
     const byContrast = meta.layers.clusters.by_contrast;
     const clusterNames = keepContrasts.flatMap((c) => byContrast[c] || []);
     if (clusterNames.length) await setOn("clusters", clusterNames, true);
@@ -1175,6 +1291,7 @@ function setTool(t) {
   document.body.classList.add(`tool-${t}`);
   // classList, not className: the compare page's "rows" class must stay.
   for (const k of ["navigate", "contour", "brush", "erase"]) $("viewers").classList.toggle(k, k === t);
+  view.requestColor();   // the contour's curvature map shows only in Contour
 }
 function setSeg(id, attr, val) {
   for (const b of $(id).children) b.classList.toggle("on", b.dataset[attr] === val);
@@ -1184,7 +1301,9 @@ function setClickMode(m) {
   setSeg("click-mode", "click", m);
   // "Put a dot on a heatmap blob to fill it" needs the map as a bound; without
   // it a fill floods the whole hemisphere. Tick it for the user.
-  if (m === "fill" && S.heat && !$("c-heat").checked) {
+  // Only when ADDING: a remove should take out the whole region, not just its
+  // above-threshold part.
+  if (m === "fill" && S.drawMode === "add" && S.heat && !$("c-heat").checked) {
     $("c-heat").checked = true;
     status(`Click now fills from the seed, inside ${S.heat.name} > ${+currentThreshold().toPrecision(4)}`);
   }
@@ -1221,6 +1340,16 @@ function wireDrawing() {
     }
   });
   $("path-surface").onchange = (e) => { S.pathSurface = e.target.value; updateContour(); };
+  const syncPathCurv = () => {
+    $("path-curv-opts").hidden = S.pathCurv === "any";
+    $("path-curv-out").textContent = S.pathCurvThr.toFixed(2);
+    if (S.pathCurv !== "any" && !S.curv) status("This subject has no curvature file: the path ignores the map", true);
+    updateContour();
+  };
+  $("path-curv").onchange = (e) => { S.pathCurv = e.target.value; syncPathCurv(); };
+  $("path-curv-thr").oninput = (e) => { S.pathCurvThr = +e.target.value; syncPathCurv(); };
+  $("path-curv-show").onchange = (e) => { S.pathCurvShow = e.target.checked; view.requestColor(); };
+  syncPathCurv();
   $("seed-fill").onchange = (e) => { S.seedFill = e.target.checked; };
   $("show-hidden").onchange = (e) => { S.showHidden = e.target.checked; updateContour(); };
   $("radius").oninput = (e) => setRadius(+e.target.value);
@@ -1262,6 +1391,10 @@ function wireDrawing() {
     setMask(fn(S.drawn.get(S.active).mask), what);
   };
   $("fill-holes").onclick = op("Fill holes", (m) => M.fillHoles(S.adj, m));
+  $("op-layer").addEventListener("focus", fillOpLayer);
+  $("op-layer").addEventListener("mousedown", fillOpLayer);
+  $("op-remove").onclick = () => layerOp("remove");
+  $("op-keep").onclick = () => layerOp("keep");
   $("dilate").onclick = op("Dilate", (m) => D.dilate(S.adj, m));
   $("erode").onclick = op("Erode", (m) => D.erode(S.adj, m));
   $("clear").onclick = () => {
@@ -1321,6 +1454,9 @@ function wire() {
     if (e.key === ".") step(1);
   });
   $("heat").onchange = (e) => setHeatmap(e.target.value);
+  $("heat2").onchange = (e) => setHeatmap2(e.target.value);
+  $("thr2").oninput = (e) => setThreshold2(e.target.value);
+  $("thr2-n").onchange = (e) => setThreshold2(e.target.value);
   $("thr").oninput = (e) => setThreshold(e.target.value);
   $("thr-n").onchange = (e) => setThreshold(e.target.value);
   $("c-thr-r").oninput = (e) => setThreshold(e.target.value);
@@ -1384,6 +1520,7 @@ function wire() {
     const parts = [S.sub, S.hemi];
     if (COMPARE) parts.push(`${folderName(S.templates.manual)}-vs-${folderName(S.templates.compare)}`);
     if (S.heat) parts.push(S.heat.name, `thr${+currentThreshold().toPrecision(3)}`);
+    if (COMPARE && S.heat2Name !== SAME && S.heat2) parts.push(`bottom-${S.heat2.name}`, `thr${+thrOf(S.heat2).toPrecision(3)}`);
     const a = document.createElement("a");
     a.href = view.snapshot();
     a.download = `${parts.join("_")}.png`;

@@ -1,4 +1,4 @@
-#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=MOG coords=white from=aparc.a2009s:G_occipital_middle+S_occipital_ant
+#!ascii label , from subject sub-07 vox2ras=TkReg rh ROI=MOG coords=white drawn-with=delineation-helper-0.1.0
 2816
 812  22.327  -87.847  6.334 0.0000000000
 820  23.218  -87.586  5.737 0.0000000000
